@@ -63,10 +63,6 @@ class CommitViewModel(
             _state.value = current.copy(error = "请填写提交信息")
             return
         }
-        if (current.authorName.isBlank() || current.authorEmail.isBlank()) {
-            _state.value = current.copy(error = "请先在设置里填写作者名与邮箱")
-            return
-        }
         viewModelScope.launch {
             _state.value = current.copy(committing = true, error = null)
             runCatching {

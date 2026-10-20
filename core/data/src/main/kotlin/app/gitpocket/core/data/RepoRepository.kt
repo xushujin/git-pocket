@@ -2,6 +2,8 @@ package app.gitpocket.core.data
 
 import app.gitpocket.core.common.AppDispatchers
 import app.gitpocket.core.common.RepoLockRegistry
+import app.gitpocket.core.database.AccountDao
+import app.gitpocket.core.database.AccountEntity
 import app.gitpocket.core.database.DraftEntity
 import app.gitpocket.core.database.RepoDao
 import app.gitpocket.core.database.RepoEntity
@@ -17,7 +19,6 @@ import app.gitpocket.core.model.FileEntry
 import app.gitpocket.core.model.Repo
 import app.gitpocket.core.model.RepoId
 import java.io.File
-import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -30,6 +31,7 @@ import kotlinx.coroutines.withContext
 class RepoRepository(
     private val repoRoot: File,
     private val repoDao: RepoDao,
+    private val accountDao: AccountDao,
     private val draftDao: DraftDao,
     private val settings: SettingsRepository,
     private val locks: RepoLockRegistry,
@@ -46,44 +48,62 @@ class RepoRepository(
     /** 首次启动时创建一个真实的本机仓库，保证 UI 有内容且不依赖网络。 */
     suspend fun ensureSeedRepo() = withContext(dispatchers.io) {
         if (repoDao.observeAll().first().isNotEmpty()) return@withContext
-        val directory = File(repoRoot, "demo")
-        directory.mkdirs()
 
-        val git = GitRepo.init(directory)
-        try {
-            File(directory, "README.md").writeText(
-                "# GitPocket Demo\n\n" +
-                    "这是一个由 GitPocket 自研 Git 引擎创建的真实仓库，不是 mock 数据。\n"
+        // repo.accountId 有外键约束，必须先落一条本地账号，否则会抛
+        // SQLITE_CONSTRAINT_FOREIGNKEY(787)。本地仓库不需要真实账号。
+        val now = System.currentTimeMillis()
+        accountDao.upsert(
+            AccountEntity(
+                id = LOCAL_ACCOUNT_ID,
+                host = "local",
+                username = "local",
+                tokenRef = "",
+                createdAt = now,
+                lastUsedAt = now,
             )
-            File(directory, "notes.md").writeText(
-                "- 在手机上改一行\n- 提交\n- 推走\n"
-            )
-            val ident = ident()
-            git.stageAll()
-            git.commit("chore: 初始化示例仓库", ident)
+        )
 
-            File(directory, "notes.md").appendText("- 支持 diff 查看\n")
-            git.stageAll()
-            git.commit("feat: 补充一条说明", ident)
+        val directory = File(repoRoot, SEED_REPO_DIR)
+        // 上一次启动可能已经建过仓库（例如后续插入失败），这里只补数据不重复提交
+        val alreadyInitialized = File(directory, ".git").isDirectory
+        if (!alreadyInitialized) {
+            directory.mkdirs()
+            val git = GitRepo.init(directory)
+            try {
+                File(directory, "README.md").writeText(
+                    "# GitPocket Demo\n\n" +
+                        "这是一个由 GitPocket 自研 Git 引擎创建的真实仓库，不是 mock 数据。\n"
+                )
+                File(directory, "notes.md").writeText(
+                    "- 在手机上改一行\n- 提交\n- 推走\n"
+                )
+                val ident = ident()
+                git.stageAll()
+                git.commit("chore: 初始化示例仓库", ident)
 
-            File(directory, "src").mkdirs()
-            File(directory, "src/main.kt").writeText("fun main() {\n    println(\"hello gitpocket\")\n}\n")
-            git.stageAll()
-            git.commit("feat: 添加示例源码", ident)
-        } finally {
-            git.close()
+                File(directory, "notes.md").appendText("- 支持 diff 查看\n")
+                git.stageAll()
+                git.commit("feat: 补充一条说明", ident)
+
+                File(directory, "src").mkdirs()
+                File(directory, "src/main.kt").writeText("fun main() {\n    println(\"hello gitpocket\")\n}\n")
+                git.stageAll()
+                git.commit("feat: 添加示例源码", ident)
+            } finally {
+                git.close()
+            }
         }
 
         repoDao.upsert(
             RepoEntity(
-                id = UUID.randomUUID().toString(),
-                accountId = "local",
+                id = SEED_REPO_ID,
+                accountId = LOCAL_ACCOUNT_ID,
                 owner = "local",
                 name = "demo",
                 remoteUrl = "",
                 localPath = directory.absolutePath,
                 defaultBranch = "main",
-                lastOpenedAt = System.currentTimeMillis(),
+                lastOpenedAt = now,
             )
         )
     }
@@ -182,4 +202,11 @@ class RepoRepository(
         pinned = pinned,
         sizeBytes = sizeBytes,
     )
+
+    private companion object {
+        const val LOCAL_ACCOUNT_ID = "local"
+        const val SEED_REPO_ID = "local-demo"
+        const val SEED_REPO_DIR = "demo"
+    }
+
 }

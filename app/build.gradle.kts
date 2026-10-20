@@ -113,6 +113,18 @@ kotlin {
     }
 }
 
+// 产物命名与应用名一致：GitPocket.apk / GitPocket-debug.apk
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            // AGP 8.9 的公开 VariantOutput 还没有 outputFileName，只能用 impl 设置
+            (output as com.android.build.api.variant.impl.VariantOutputImpl).outputFileName.set(
+                if (variant.buildType == "debug") "GitPocket-debug.apk" else "GitPocket.apk"
+            )
+        }
+    }
+}
+
 // release 守卫：请求 release 构建但缺少签名配置时直接失败，绝不静默产出未签名包。
 listOf("assembleRelease", "bundleRelease", "packageRelease").forEach { taskName ->
     tasks.matching { it.name == taskName }.configureEach {

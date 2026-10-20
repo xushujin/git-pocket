@@ -2,11 +2,8 @@ package app.gitpocket.feature.editor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -101,11 +98,10 @@ fun EditorScreen(
                     lineHeight = (state.fontSizeSp + 6).sp,
                 )
                 val verticalScroll = rememberScrollState()
-                val horizontalScroll = rememberScrollState()
 
                 Row(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .weight(1f)
                         .verticalScroll(verticalScroll)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -121,19 +117,15 @@ fun EditorScreen(
                             }
                         }
                     }
-                    Box(
+                    BasicTextField(
+                        value = state.content,
+                        onValueChange = viewModel::onContentChange,
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(horizontalScroll)
-                    ) {
-                        BasicTextField(
-                            value = state.content,
-                            onValueChange = viewModel::onContentChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = lineStyle.copy(color = palette.contentPrimary),
-                            cursorBrush = SolidColor(palette.accent),
-                        )
-                    }
+                            .padding(start = 6.dp),
+                        textStyle = lineStyle.copy(color = palette.contentPrimary),
+                        cursorBrush = SolidColor(palette.accent),
+                    )
                 }
 
                 Row(

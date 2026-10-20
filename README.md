@@ -63,8 +63,8 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 
 | 任务 | 命令 | 产物 |
 |---|---|---|
-| Debug | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/app-debug.apk` |
-| Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release.apk` |
+| Debug | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/GitPocket-debug.apk` |
+| Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/GitPocket.apk` |
 | Release AAB | `./gradlew :app:bundleRelease` | `app/build/outputs/bundle/release/app-release.aab` |
 | 全量校验 | `./gradlew test lint assembleDebug` | 测试报告 + lint 报告 |
 

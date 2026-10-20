@@ -30,6 +30,7 @@ class AppContainer(context: Context) {
         RepoRepository(
             repoRoot = File(appContext.filesDir, "repos"),
             repoDao = database.repoDao(),
+            accountDao = database.accountDao(),
             draftDao = database.draftDao(),
             settings = settings,
             locks = RepoLockRegistry(),

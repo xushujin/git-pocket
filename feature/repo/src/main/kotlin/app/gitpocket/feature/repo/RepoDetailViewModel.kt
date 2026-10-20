@@ -36,9 +36,10 @@ class RepoDetailViewModel(
         refresh()
     }
 
-    fun refresh() {
+    /** silent=true 时保留现有内容，只做后台刷新（用于页面 resume）。 */
+    fun refresh(silent: Boolean = false) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(loading = true, error = null)
+            if (!silent) _state.value = _state.value.copy(loading = true, error = null)
             runCatching {
                 val repo = repository.findRepo(repoId)
                 val branch = repository.branches(repoId).firstOrNull { it.isCurrent }?.name

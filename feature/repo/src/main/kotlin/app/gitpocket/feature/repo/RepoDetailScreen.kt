@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -62,6 +63,12 @@ fun RepoDetailScreen(
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(DetailTab.CHANGES) }
+
+    // 从编辑器 / 提交页返回时静默刷新，否则会一直显示进入时的旧状态
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh(silent = true)
+        onPauseOrDispose { }
+    }
 
     GpScreen {
         GpTopBar(

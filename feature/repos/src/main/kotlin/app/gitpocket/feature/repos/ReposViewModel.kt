@@ -39,5 +39,7 @@ class ReposViewModel(private val repository: RepoRepository) : ViewModel() {
 
 internal fun Throwable.userMessage(): String = when (this) {
     is app.gitpocket.core.git.GitException -> message ?: "Git 操作失败"
+    is android.database.sqlite.SQLiteException ->
+        "本地数据库初始化失败，请重启应用；若仍失败请把下面这行反馈给开发者：\n${message?.take(120)}"
     else -> message ?: "未知错误"
 }

@@ -15,6 +15,15 @@
 - AndroidKeyStore AES-256-GCM token 存储。
 - CI：PR 校验、tag 触发签名发布。
 
+### Fixed
+
+- 首次启动崩溃：`repo` 表插入时 `accountId="local"` 没有对应账号行，触发
+  `SQLITE_CONSTRAINT_FOREIGNKEY (787)`。现在先落本地账号行再插仓库，并让种子逻辑幂等
+  （重复启动不会重复提交）。
+- APK 产物名与应用名对齐：`GitPocket.apk` / `GitPocket-debug.apk`。
+- 从编辑器返回仓库详情后不刷新，仍显示"工作区干净"（改为页面 resume 时静默刷新）。
+- 作者未设置时提交被直接拦截（仓库层已有兜底身份，改为允许提交并提示可修改）。
+
 ### Known issues
 
 - clone / fetch / push 尚未实现（网络传输层为下一阶段）。

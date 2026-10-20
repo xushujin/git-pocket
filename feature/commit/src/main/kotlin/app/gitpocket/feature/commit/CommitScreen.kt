@@ -110,7 +110,8 @@ fun CommitScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "作者：${state.authorName.ifBlank { "未设置" }} <${state.authorEmail.ifBlank { "-" }}>",
+                        text = "作者：${state.authorName.ifBlank { "GitPocket User" }} <${state.authorEmail.ifBlank { "user@gitpocket.app" }}>" +
+                            if (state.authorName.isBlank()) "（可在设置里修改）" else "",
                         style = typography.caption,
                         color = palette.contentSecondary,
                     )
