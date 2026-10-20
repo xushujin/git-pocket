@@ -118,6 +118,22 @@ class GitRepo private constructor(
         // 未暂存：工作区 vs index
         index.forEach { (path, entry) ->
             val file = File(workTree, path)
+
+            // 符号链接：git 存的是链接目标字符串，必须按链接本身比较，
+            // 否则 File.length() 会跟随链接取到目标文件大小，误报 modified。
+            val isLink = runCatching { java.nio.file.Files.isSymbolicLink(file.toPath()) }.getOrDefault(false)
+            if (isLink) {
+                val target = runCatching {
+                    java.nio.file.Files.readSymbolicLink(file.toPath()).toString()
+                }.getOrNull()
+                val bytes = target?.toByteArray(StandardCharsets.UTF_8)
+                val changed = bytes == null ||
+                    bytes.size.toLong() != entry.size ||
+                    hashBytes(bytes) != entry.oid
+                if (changed) result.add(FileChange(path, ChangeType.MODIFIED, staged = false))
+                return@forEach
+            }
+
             if (!file.isFile) {
                 result.add(FileChange(path, ChangeType.DELETED, staged = false))
                 return@forEach
@@ -208,6 +224,70 @@ class GitRepo private constructor(
     }
 
     // ---------------------------------------------------------------- 写入
+
+    /**
+     * 把某个 tree 检出到工作区并重建 index（clone 的收尾动作）。
+     * 返回写出的文件数。
+     */
+    fun checkoutTree(treeId: ObjectId, onProgress: (Int) -> Unit = {}): Int {
+        val files = flattenTree(treeId)
+        val index = GitIndex.empty()
+        var written = 0
+
+        files.forEach { (path, entry) ->
+            // 子模块只登记 gitlink，不落文件
+            if (entry.mode == GitTreeEntry.MODE_SUBMODULE) {
+                index.put(IndexEntry(path = path, oid = entry.oid, mode = entry.mode, stage = 0))
+                return@forEach
+            }
+
+            val blob = objects.read(entry.oid) as? GitBlob ?: return@forEach
+            val file = File(workTree, path)
+            file.parentFile?.mkdirs()
+
+            var effectiveMode = entry.mode
+            if (entry.mode == GitTreeEntry.MODE_SYMLINK) {
+                val target = String(blob.content, StandardCharsets.UTF_8)
+                val created = runCatching {
+                    java.nio.file.Files.createSymbolicLink(file.toPath(), java.nio.file.Paths.get(target))
+                }.isSuccess
+                if (!created) {
+                    // 文件系统不支持符号链接时降级为普通文件，并把 index 里的 mode 改成普通文件，
+                    // 否则 git 会一直报 typechange。
+                    file.writeBytes(blob.content)
+                    effectiveMode = GitTreeEntry.MODE_FILE
+                }
+            } else {
+                file.writeBytes(blob.content)
+                if (entry.mode == GitTreeEntry.MODE_EXECUTABLE) {
+                    file.setExecutable(true, true)
+                }
+            }
+
+            val lastModified = file.lastModified()
+            val seconds = lastModified / 1000
+            val nanos = ((lastModified % 1000) * 1_000_000).toInt()
+            index.put(
+                IndexEntry(
+                    path = path,
+                    oid = entry.oid,
+                    mode = effectiveMode,
+                    stage = 0,
+                    size = blob.content.size.toLong(),
+                    mtimeSeconds = seconds,
+                    mtimeNanos = nanos,
+                    ctimeSeconds = seconds,
+                    ctimeNanos = nanos,
+                )
+            )
+            written++
+            if (written % 50 == 0) onProgress(written)
+        }
+
+        index.writeTo(indexFile)
+        onProgress(written)
+        return written
+    }
 
     fun writeWorkFile(path: String, content: String) {
         val file = File(workTree, path)
@@ -322,8 +402,9 @@ class GitRepo private constructor(
 
     // ---------------------------------------------------------------- 内部
 
-    private fun hashFile(file: File): ObjectId {
-        val bytes = file.readBytes()
+    private fun hashFile(file: File): ObjectId = hashBytes(file.readBytes())
+
+    private fun hashBytes(bytes: ByteArray): ObjectId {
         val header = "blob ${bytes.size}\u0000".toByteArray(StandardCharsets.US_ASCII)
         return Sha1.digest(header, bytes)
     }

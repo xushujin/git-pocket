@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +40,7 @@ import app.gitpocket.core.model.Repo
 fun ReposScreen(
     onOpenRepo: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenClone: () -> Unit,
 ) {
     val repository = LocalRepoRepository.current
     val viewModel: ReposViewModel = viewModel(
@@ -53,6 +55,7 @@ fun ReposScreen(
             title = "GitPocket",
             subtitle = "口袋里的 Git 管理器",
             actions = {
+                GpIconButton(Icons.Default.Add, "克隆仓库", onOpenClone)
                 GpIconButton(Icons.Default.Settings, "设置", onOpenSettings)
             },
         )
@@ -66,7 +69,9 @@ fun ReposScreen(
 
             state.repos.isEmpty() -> GpEmptyState(
                 title = "还没有仓库",
-                description = "克隆功能将在下一阶段接入网络层；当前可先用示例仓库体验编辑与提交。",
+                description = "用 HTTPS 地址克隆一个仓库开始（公开仓库无需 token）。",
+                actionLabel = "克隆仓库",
+                onAction = onOpenClone,
             )
 
             else -> LazyColumn(

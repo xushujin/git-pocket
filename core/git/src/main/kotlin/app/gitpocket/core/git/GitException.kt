@@ -18,5 +18,12 @@ sealed class GitException(message: String, cause: Throwable? = null) : Exception
 
     class NothingToCommit : GitException("没有可提交的变更")
 
+    class AuthFailed(val host: String) : GitException("认证失败：$host（请检查 token 与权限）")
+
+    class RemoteNotFound(val url: String) : GitException("仓库不存在或无权访问：$url")
+
+    class Network(val retryable: Boolean, cause: Throwable) :
+        GitException("网络错误：${cause.message ?: "未知原因"}", cause)
+
     class Io(val path: String, cause: Throwable) : GitException("读写失败：$path", cause)
 }

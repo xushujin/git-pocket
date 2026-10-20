@@ -1195,6 +1195,8 @@ jobs:
 | 设置注册表 / 关于页 | `core/datastore`、`feature/settings` | 编译通过 | ⚠️ 未真机运行 |
 | Room v2 + 显式迁移 1→2 | `core/database` | schema 1.json / 2.json 已生成；迁移测试需模拟器 | ⚠️ 部分验证 |
 | AndroidKeyStore AES-GCM token | `core/security` | 编译通过 | ⚠️ 未真机验证 |
+| **HTTPS 克隆**（pkt-line / side-band / pack 拆包 / 检出） | `core/git/transport` | 真实 GitHub 仓库（Hello-World、gitignore）克隆后用桌面 git 校验 | ✅ |
+| 符号链接与子模块检出 | `core/git/GitRepo.checkoutTree` | gitignore 仓库含 3 个符号链接，`git status` 干净 | ✅ |
 
 ### 14.2 构建与质量门禁
 
@@ -1209,7 +1211,10 @@ jobs:
 
 ### 14.3 明确未实现（不要当作已完成）
 
-- **网络传输**：clone / fetch / pull / push（smart HTTP v2）——下一阶段，`core/git` 尚无 transport 模块。
+- **增量同步**：fetch / pull / push —— clone 已实现（smart HTTP v0），但增量协商、推送 pack 生成尚未做。
+- **克隆的限制**：只请求 heads/tags 的 tip（不做 shallow / partial）；收到 pack 后拆成 loose object
+  （不写 pack + idx，因此大仓库占用偏大：gitignore 仓库 319 文件约 48MB）；
+  不支持断点续传；未验证 GitLab / Gitea 实机（协议兼容，但未实测）。
 - **冲突处理 UI**：引擎侧 diff3 未实现，UI 也未接。
 - **PR / CI / Issue**：未开始。
 - **语法高亮 / 行内 diff / 部分克隆**：未开始。
@@ -1232,6 +1237,10 @@ jobs:
 | 提交 | ✅ 提交后回到详情页并显示"工作区干净" |
 | 产物校验 | ✅ 导出仓库到桌面：`git log` 4 条、`git status` 干净、`git fsck --strict` 通过、`git show --stat` 显示 1 file changed |
 | 主题切换 | ✅ 设置里切到深色后全局立即生效（首页/设置页均为深色，未重建页面） |
+| HTTPS 克隆（公开仓库） | ✅ `octocat/Hello-World`：分支 master、3 条提交、3 个分支、remote 正确 |
+| HTTPS 克隆（较大仓库） | ✅ `github/gitignore`：11896 个对象、319 文件，`git fsck --strict` 通过 |
+| 克隆结果校验 | ✅ 导出到桌面：`git log` / `git status` 干净 / `git fsck` 通过 / `git remote -v` 正确 |
+| 符号链接 | ✅ gitignore 仓库 3 个 symlink 正确创建，应用内与桌面 `git status` 均为干净 |
 
 本轮修复的三个问题：
 1. 首次启动崩溃 `SQLITE_CONSTRAINT_FOREIGNKEY (787)`：`repo.accountId` 指向的账号行不存在。

@@ -22,7 +22,8 @@
 | 暂存 / 提交 | ✅ 已实现 | 提交后 `git log` 可读 |
 | 主题系统（6 套配色，拟态） | ✅ 已实现 | 全局即时生效 |
 | 设置 / 关于页 | ✅ 已实现 | 设置项走注册表 |
-| **clone / fetch / pull / push** | ❌ 未实现 | 第二阶段：smart HTTP v2 |
+| **clone（HTTPS + PAT）** | ✅ 已实现 | smart HTTP v0，真实 GitHub 仓库验证 |
+| **fetch / pull / push** | ❌ 未实现 | 第二阶段 |
 | **冲突处理 UI** | ❌ 未实现 | 引擎已有 diff3 规划，UI 待接 |
 | PR / CI / Issue | ❌ 未实现 | 第二阶段 |
 
@@ -30,8 +31,18 @@
 
 ## 支持范围
 
-- 已支持：本地仓库的浏览、编辑、暂存、提交、diff、历史。
-- 未支持：克隆 / 拉取 / 推送、SSH、Git LFS、submodule、SHA-256 仓库、force push、rebase。
+- 已支持：HTTPS 克隆（公开仓库 + PAT 私有仓库）、本地仓库的浏览、编辑、暂存、提交、diff、历史。
+- 未支持：fetch / pull / push、SSH、Git LFS、submodule 递归、SHA-256 仓库、force push、rebase。
+
+## 添加自己的仓库
+
+1. 首页右上角 **＋** → 「克隆仓库」；
+2. 填 HTTPS 地址，例如 `https://github.com/owner/repo.git`；
+3. 公开仓库直接点「开始克隆」；私有仓库补 Token（GitHub 用 fine-grained PAT，contents 只读即可）；
+4. 克隆完成后会自动进入仓库，之后可离线浏览、编辑、提交。
+
+> 仓库会被完整复制到应用私有目录（`files/repos/<owner>-<name>-<id>`），
+> 不是直接操作手机上的文件夹。
 
 ## 环境要求
 

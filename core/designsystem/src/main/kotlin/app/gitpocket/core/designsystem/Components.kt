@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -200,6 +202,7 @@ fun GpTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     textStyle: TextStyle? = null,
+    isPassword: Boolean = false,
 ) {
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
@@ -216,6 +219,7 @@ fun GpTextField(
         singleLine = singleLine,
         minLines = minLines,
         cursorBrush = SolidColor(palette.accent),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         decorationBox = { inner ->
             Box {
                 if (value.isEmpty()) {

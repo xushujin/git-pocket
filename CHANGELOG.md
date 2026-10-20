@@ -14,6 +14,8 @@
 - Room 数据库（v2）+ 显式迁移 1→2 + schema 导出。
 - AndroidKeyStore AES-256-GCM token 存储。
 - CI：PR 校验、tag 触发签名发布。
+- **HTTPS 克隆**：smart HTTP v0（pkt-line / side-band-64k / ofs-delta），
+  公开仓库与 PAT 私有仓库均可；收到 pack 后拆为 loose object 并检出工作区。
 
 ### Fixed
 
@@ -26,6 +28,7 @@
 
 ### Known issues
 
-- clone / fetch / push 尚未实现（网络传输层为下一阶段）。
+- fetch / pull / push 尚未实现（克隆已完成，增量同步为下一阶段）。
+- 克隆后对象以 loose 形式存储（不做 pack + idx 落盘），大仓库占用偏大。
 - 冲突处理 UI 未接入。
 - 编辑器行号栏在软换行下会错位（当前禁用软换行规避）。

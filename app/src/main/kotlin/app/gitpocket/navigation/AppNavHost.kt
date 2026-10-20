@@ -12,12 +12,14 @@ import app.gitpocket.feature.editor.DiffScreen
 import app.gitpocket.feature.editor.EditorScreen
 import app.gitpocket.feature.repo.BrowseScreen
 import app.gitpocket.feature.repo.RepoDetailScreen
+import app.gitpocket.feature.repos.CloneScreen
 import app.gitpocket.feature.repos.ReposScreen
 import app.gitpocket.feature.settings.AboutScreen
 import app.gitpocket.feature.settings.SettingsScreen
 
 private object Routes {
     const val REPOS = "repos"
+    const val CLONE = "clone"
     const val REPO = "repo/{repoId}"
     const val BROWSE = "browse/{repoId}?path={path}"
     const val EDITOR = "editor/{repoId}?path={path}"
@@ -42,6 +44,18 @@ fun AppNavHost(appVersion: String) {
             ReposScreen(
                 onOpenRepo = { navController.navigate(Routes.repo(it)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenClone = { navController.navigate(Routes.CLONE) },
+            )
+        }
+
+        composable(Routes.CLONE) {
+            CloneScreen(
+                onBack = { navController.popBackStack() },
+                onCloned = { repoId ->
+                    navController.navigate(Routes.repo(repoId)) {
+                        popUpTo(Routes.REPOS)
+                    }
+                },
             )
         }
 

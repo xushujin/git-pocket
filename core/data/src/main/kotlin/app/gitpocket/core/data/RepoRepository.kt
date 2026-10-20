@@ -9,8 +9,13 @@ import app.gitpocket.core.database.RepoDao
 import app.gitpocket.core.database.RepoEntity
 import app.gitpocket.core.database.DraftDao
 import app.gitpocket.core.datastore.SettingsRepository
+import app.gitpocket.core.security.KeystoreTokenStore
 import app.gitpocket.core.git.GitIdent
+import app.gitpocket.core.git.GitException
 import app.gitpocket.core.git.GitRepo
+import app.gitpocket.core.git.transport.CloneProgress
+import app.gitpocket.core.git.transport.GitCloner
+import app.gitpocket.core.git.transport.GitCredentials
 import app.gitpocket.core.model.Branch
 import app.gitpocket.core.model.CommitSummary
 import app.gitpocket.core.model.FileChange
@@ -19,6 +24,8 @@ import app.gitpocket.core.model.FileEntry
 import app.gitpocket.core.model.Repo
 import app.gitpocket.core.model.RepoId
 import java.io.File
+import java.net.URI
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -34,6 +41,7 @@ class RepoRepository(
     private val accountDao: AccountDao,
     private val draftDao: DraftDao,
     private val settings: SettingsRepository,
+    private val tokenStore: KeystoreTokenStore,
     private val locks: RepoLockRegistry,
     private val dispatchers: AppDispatchers,
 ) {
@@ -107,6 +115,68 @@ class RepoRepository(
             )
         )
     }
+
+    /**
+     * 通过 HTTPS 克隆远端仓库到应用私有目录，并登记到数据库。
+     * token 为空表示公开仓库；非空时以 PAT 方式认证并加密保存。
+     */
+    suspend fun clone(
+        url: String,
+        username: String,
+        token: String,
+        onProgress: (CloneProgress) -> Unit,
+    ): Repo = withContext(dispatchers.io) {
+        val normalized = url.trim().trimEnd('/')
+        if (!normalized.startsWith("https://")) {
+            throw GitException.UnsupportedFeature("仅支持 https:// 地址")
+        }
+        val uri = URI(normalized)
+        val host = uri.host ?: throw GitException.UnsupportedFeature("无法解析仓库地址")
+        val segments = uri.path.trim('/').split('/').filter { it.isNotBlank() }
+        val name = segments.lastOrNull()?.removeSuffix(".git")?.ifBlank { "repo" } ?: "repo"
+        val owner = segments.getOrNull(segments.size - 2) ?: host
+
+        val repoId = UUID.randomUUID().toString()
+        val directory = File(repoRoot, "$owner-$name-${repoId.take(8)}")
+        val credentials = token.takeIf { it.isNotBlank() }
+            ?.let { GitCredentials(username.ifBlank { "x-access-token" }, it) }
+
+        val result = GitCloner(credentials).clone(normalized, directory, onProgress)
+
+        val accountId = "acct-${host}-${username.ifBlank { "anonymous" }}"
+        val now = System.currentTimeMillis()
+        accountDao.upsert(
+            AccountEntity(
+                id = accountId,
+                host = host,
+                username = username.ifBlank { "anonymous" },
+                tokenRef = if (credentials != null) accountId else "",
+                createdAt = now,
+                lastUsedAt = now,
+            )
+        )
+        if (credentials != null) {
+            tokenStore.save(accountId, token)
+        }
+
+        repoDao.upsert(
+            RepoEntity(
+                id = repoId,
+                accountId = accountId,
+                owner = owner,
+                name = name,
+                remoteUrl = normalized,
+                localPath = result.workTree.absolutePath,
+                defaultBranch = result.defaultBranch,
+                lastOpenedAt = now,
+                sizeBytes = directorySize(directory),
+            )
+        )
+        repoDao.findById(repoId)!!.toModel()
+    }
+
+    private fun directorySize(directory: File): Long =
+        directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     suspend fun status(repoId: RepoId): List<FileChange> = read(repoId) { it.status() }
 

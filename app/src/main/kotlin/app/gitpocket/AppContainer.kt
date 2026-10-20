@@ -33,6 +33,7 @@ class AppContainer(context: Context) {
             accountDao = database.accountDao(),
             draftDao = database.draftDao(),
             settings = settings,
+            tokenStore = tokenStore,
             locks = RepoLockRegistry(),
             dispatchers = DefaultAppDispatchers,
         )
