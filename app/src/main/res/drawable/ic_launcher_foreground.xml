@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 图标：口袋轮廓 + 分支节点（三个圆点 + 折线），单色可辨，无第三方商标元素 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 口袋 -->
+    <path
+        android:pathData="M32,38 h44 a7,7 0 0 1 7,7 v26 a7,7 0 0 1 -7,7 h-44 a7,7 0 0 1 -7,-7 v-26 a7,7 0 0 1 7,-7 z"
+        android:strokeColor="#F2F5FA"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000" />
+
+    <!-- 分支折线 -->
+    <path
+        android:pathData="M42,55 L54,55 L54,70 M66,55 L54,55"
+        android:strokeColor="#F2F5FA"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+    <!-- 三个节点 -->
+    <path
+        android:pathData="M42,51 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="#7A93FF" />
+    <path
+        android:pathData="M66,51 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="#7A93FF" />
+    <path
+        android:pathData="M54,70 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="#7A93FF" />
+</vector>

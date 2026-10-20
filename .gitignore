@@ -1,0 +1,25 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 工具链（本机自用，不进版本库）
+.tooling/
+android-sdk/
+
+# 签名（绝不入库）
+keystore.properties
+*.jks
+*.keystore
+
+# 系统
+.DS_Store
+
+# WorkBuddy 项目数据（不参与版本控制）
+.workbuddy-ai/
+.kotlin/

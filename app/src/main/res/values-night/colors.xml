@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 Compose 默认深色配色 Graphite 的 base 保持一致 -->
+    <color name="gp_window_background">#23262B</color>
+</resources>

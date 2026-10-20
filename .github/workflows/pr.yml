@@ -1,0 +1,29 @@
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 零警告：CI 上强制 allWarningsAsErrors
+      - name: Unit tests (JVM)
+        run: ./gradlew :core:git:test --stacktrace -Pgitpocket.werror=true
+
+      - name: Lint
+        run: ./gradlew lintDebug
+
+      - name: Assemble debug
+        run: ./gradlew :app:assembleDebug

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 Compose 默认浅色配色 Mist 的 base 保持一致，避免启动白闪 -->
+    <color name="gp_window_background">#E8ECF2</color>
+    <color name="ic_launcher_background">#1D2433</color>
+</resources>
