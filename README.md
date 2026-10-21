@@ -94,8 +94,8 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 
 脚本会打印版本号、路径、大小、SHA-256、签名指纹和 mapping 路径。
 
-- 版本号：有 tag 时用 tag（`v0.1.0` → `0.1.0`）；无 tag 时用构建时间戳
-  （`0.1.0-dev.261021.0913`，versionCode 取 `yyMMddHH`），保证每次交付可区分、可覆盖安装。
+- 版本号：`versionName` 由 tag 决定（`v1.0.0` → `1.0.0`），无 tag 时为 `0.1.0-dev.<yyMMdd.HHmm>`；
+  `versionCode` 一律取构建时间戳 `yyMMddHH`，保证任何包都能覆盖安装（tag 派生的小数字会低于开发包）。
 - 签名：本机 keystore 在 `~/.gitpocket/keys/gitpocket-release.jks`（不进版本库）。
   **换 key 就必须卸载重装**，所以这个文件务必备份。
 - 崩溃日志：release 开了 R8，堆栈需用 `app/build/outputs/mapping/release/mapping.txt` 还原。
@@ -150,10 +150,33 @@ keyPassword=******
 
 | 工作流 | 触发 | 内容 |
 |---|---|---|
-| `.github/workflows/pr.yml` | PR | 单测、lint、debug 构建、真实文件对拍 |
-| `.github/workflows/release.yml` | tag `v*` | 签名构建、签名校验、自动发布 Release |
+| `.github/workflows/pr.yml` | PR / push main | 单元测试、lint（**不产出 APK**） |
+| `.github/workflows/release.yml` | 推送 tag `v*.*.*` | 签名构建、签名校验、自动创建 Release |
 
-需要的 Secrets：`KEYSTORE_BASE64`、`STORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。
+**APK 只有 tag 能触发构建**，其他任何提交都不会产出安装包。
+
+## CI 配置（GitHub Actions Secrets）
+
+仓库 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`，逐个添加：
+
+| Secret 名称 | 值 | 用途 |
+|---|---|---|
+| `KEYSTORE_BASE64` | 本机 keystore 的 base64（见下方命令） | 签名证书 |
+| `STORE_PASSWORD` | `testpass`（当前值，建议更换） | keystore 密码 |
+| `KEY_ALIAS` | `gitpocket` | key 别名 |
+| `KEY_PASSWORD` | `testpass`（当前值，建议更换） | key 密码 |
+
+生成 `KEYSTORE_BASE64` 并复制到剪贴板：
+
+```bash
+base64 -i ~/.gitpocket/keys/gitpocket-release.jks | tr -d '\n' | pbcopy
+```
+
+`GITHUB_TOKEN` 由 Actions 自动注入，**不需要配置**；工作流里已声明
+`permissions: contents: write`，用于创建 Release。
+
+> 换密码不会改变签名指纹（仍是同一张证书），但改完要同步更新 `keystore.properties`
+> 和上面的 `STORE_PASSWORD` / `KEY_PASSWORD`。
 
 ## 项目结构
 
