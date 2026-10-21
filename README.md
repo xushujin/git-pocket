@@ -80,7 +80,7 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 |---|---|---|
 | Debug | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/GitPocket-debug.apk` |
 | Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/GitPocket.apk` |
-| Release AAB | `./gradlew :app:bundleRelease` | `app/build/outputs/bundle/release/app-release.aab` |
+| Release AAB（可选，仅上架 Play 需要） | `./gradlew :app:bundleRelease` | `app/build/outputs/bundle/release/app-release.aab` |
 | 全量校验 | `./gradlew test lint assembleDebug` | 测试报告 + lint 报告 |
 | **验收包** | `./scripts/build-release.sh` | `GitPocket.apk` + 版本号/签名/SHA-256 一览 |
 
@@ -99,6 +99,7 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 - 签名：本机 keystore 在 `~/.gitpocket/keys/gitpocket-release.jks`（不进版本库）。
   **换 key 就必须卸载重装**，所以这个文件务必备份。
 - 崩溃日志：release 开了 R8，堆栈需用 `app/build/outputs/mapping/release/mapping.txt` 还原。
+  Release 里上传的是 `mapping.txt.gz`（26MB → 2MB），用前先 `gunzip mapping.txt.gz`。
   报问题时请带上版本号（设置 → 关于 里能看到）。
 
 ## 签名流程
@@ -141,7 +142,7 @@ keyPassword=******
    git tag v0.1.0 && git push origin v0.1.0
    ```
 4. CI 自动执行：单测 → lint → 签名构建 → `apksigner verify` 校验证书 → 创建 GitHub Release；
-5. 人工检查 Release 资产：APK、AAB、`mapping.txt`、SHA256；
+5. 人工检查 Release 资产：`GitPocket.apk`、`GitPocket.apk.sha256`、`mapping.txt.gz`；
 6. 手动上架（首版不做自动上架，避免误发）。
 
 版本号唯一真源是 tag：`v1.2.3` → `versionName=1.2.3`、`versionCode=10203`。本地无 tag 时为 `0.0.0-dev`。
