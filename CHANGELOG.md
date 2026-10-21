@@ -4,14 +4,6 @@
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-10-21
-
-### 变更
-
-- Release 产物名带版本号：`GitPocket-1.0.1.apk`（之前固定为 `GitPocket.apk`）。
-- Release 不再上传 AAB：不走 Google Play，AAB 无用途，CI 也少跑一个 `bundleRelease`。
-- `mapping.txt` 改为 gzip 上传（26 MB → 1.9 MB），还原堆栈前先 `gunzip`。
-
 ## [1.0.0] - 2026-10-21
 
 首个可验收版本：自研 Git 内核 + 完整本地工作流 + HTTPS 克隆。
@@ -31,6 +23,7 @@
 
 - 拟态设计系统，6 套配色（Mist / Paper / Moss / Graphite / Midnight / Ocean），主题全局即时生效
 - 仓库列表、仓库详情（变更 / 历史 / 文件）、文件浏览、编辑器、diff、提交、设置、关于
+- 空列表直接引导克隆，**不再预置示例仓库**（旧版本留下的 `local-demo` 会在升级后自动清理）
 - 语法高亮：Kotlin / Java / JS / TS / JSON / XML / Python / Shell / Markdown（自研词法器）
 - Markdown 预览：标题、段落、列表、引用、分割线、表格、围栏代码块（带高亮）、行内样式
 - 手动保存 + 离开确认 + 撤销未保存修改
@@ -47,6 +40,7 @@
 - PR：单元测试 + lint（不产出 APK）
 - tag：签名构建 → 校验签名 → 自动创建 GitHub Release
 - APK 命名 `GitPocket-<版本>.apk` / `GitPocket-debug.apk`
+- Release 资产：APK + SHA-256 + `mapping.txt.gz`（不上传 AAB；mapping 压缩后约 2 MB）
 - 版本号：tag 决定 versionName，versionCode 取构建时间戳（保证可覆盖安装）
 
 ### 修复

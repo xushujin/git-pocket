@@ -53,67 +53,24 @@ class RepoRepository(
         repoDao.findById(id.value)?.toModel()
     }
 
-    /** 首次启动时创建一个真实的本机仓库，保证 UI 有内容且不依赖网络。 */
-    suspend fun ensureSeedRepo() = withContext(dispatchers.io) {
-        if (repoDao.observeAll().first().isNotEmpty()) return@withContext
+    /**
+     * 删除旧版本（≤ 1.0.0）自动预置的示例仓库。
+     *
+     * 新版本不再预置任何仓库：列表为空时直接引导用户克隆。
+     * 老版本装过的用户升级后，local-demo 没有删除入口会一直占着列表，这里顺手清掉。
+     */
+    suspend fun removeLegacyDemo() = withContext(dispatchers.io) {
+        val entity = repoDao.findById(SEED_REPO_ID) ?: return@withContext
+        repoDao.delete(SEED_REPO_ID)
 
-        // repo.accountId 有外键约束，必须先落一条本地账号，否则会抛
-        // SQLITE_CONSTRAINT_FOREIGNKEY(787)。本地仓库不需要真实账号。
-        val now = System.currentTimeMillis()
-        accountDao.upsert(
-            AccountEntity(
-                id = LOCAL_ACCOUNT_ID,
-                host = "local",
-                username = "local",
-                tokenRef = "",
-                createdAt = now,
-                lastUsedAt = now,
-            )
-        )
-
-        val directory = File(repoRoot, SEED_REPO_DIR)
-        // 上一次启动可能已经建过仓库（例如后续插入失败），这里只补数据不重复提交
-        val alreadyInitialized = File(directory, ".git").isDirectory
-        if (!alreadyInitialized) {
-            directory.mkdirs()
-            val git = GitRepo.init(directory)
-            try {
-                File(directory, "README.md").writeText(
-                    "# GitPocket Demo\n\n" +
-                        "这是一个由 GitPocket 自研 Git 引擎创建的真实仓库，不是 mock 数据。\n"
-                )
-                File(directory, "notes.md").writeText(
-                    "- 在手机上改一行\n- 提交\n- 推走\n"
-                )
-                val ident = ident()
-                git.stageAll()
-                git.commit("chore: 初始化示例仓库", ident)
-
-                File(directory, "notes.md").appendText("- 支持 diff 查看\n")
-                git.stageAll()
-                git.commit("feat: 补充一条说明", ident)
-
-                File(directory, "src").mkdirs()
-                File(directory, "src/main.kt").writeText("fun main() {\n    println(\"hello gitpocket\")\n}\n")
-                git.stageAll()
-                git.commit("feat: 添加示例源码", ident)
-            } finally {
-                git.close()
+        // 只删自己创建在 repoRoot 下的目录，避免误删用户自己的数据
+        runCatching {
+            val directory = File(entity.localPath).canonicalFile
+            val root = repoRoot.canonicalFile
+            if (directory.path.startsWith(root.path + File.separator)) {
+                directory.deleteRecursively()
             }
         }
-
-        repoDao.upsert(
-            RepoEntity(
-                id = SEED_REPO_ID,
-                accountId = LOCAL_ACCOUNT_ID,
-                owner = "local",
-                name = "demo",
-                remoteUrl = "",
-                localPath = directory.absolutePath,
-                defaultBranch = "main",
-                lastOpenedAt = now,
-            )
-        )
     }
 
     /**
@@ -288,7 +245,6 @@ class RepoRepository(
     private companion object {
         const val LOCAL_ACCOUNT_ID = "local"
         const val SEED_REPO_ID = "local-demo"
-        const val SEED_REPO_DIR = "demo"
     }
 
 }

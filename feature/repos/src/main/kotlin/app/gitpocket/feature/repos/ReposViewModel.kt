@@ -21,10 +21,8 @@ class ReposViewModel(private val repository: RepoRepository) : ViewModel() {
     val state: StateFlow<ReposUiState> = _state.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            runCatching { repository.ensureSeedRepo() }
-                .onFailure { _state.value = ReposUiState(loading = false, error = it.userMessage()) }
-        }
+        // 新版本不再预置示例仓库；这里只清理旧版本留下的 local-demo
+        viewModelScope.launch { runCatching { repository.removeLegacyDemo() } }
         viewModelScope.launch {
             repository.observeRepos().collect { repos ->
                 _state.value = ReposUiState(loading = false, repos = repos)
