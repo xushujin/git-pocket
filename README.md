@@ -151,10 +151,11 @@ keyPassword=******
 
 | 工作流 | 触发 | 内容 |
 |---|---|---|
-| `.github/workflows/pr.yml` | PR / push main | 单元测试、lint（**不产出 APK**） |
-| `.github/workflows/release.yml` | 推送 tag `v*.*.*` | 签名构建、签名校验、自动创建 Release |
+| `.github/workflows/release.yml` | **推送 tag `v*.*.*`** | 签名构建、签名校验、自动创建 Release |
+| `.github/workflows/verify.yml` | 手动（Actions → Run workflow） | 单元测试、lint（不产出 APK） |
 
-**APK 只有 tag 能触发构建**，其他任何提交都不会产出安装包。
+**只有推送 tag 才会自动触发任何工作流**。日常提交、PR 都不会跑 CI，也不会产出安装包；
+需要检查时去 Actions 页面手动点 `verify` 的 Run workflow。
 
 ## CI 配置（GitHub Actions Secrets）
 

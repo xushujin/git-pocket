@@ -1,9 +1,9 @@
-name: pr
+name: verify
 
+# 只有推送 tag 才会自动触发构建（见 release.yml）。
+# 这个工作流只用于手动跑单测 + lint：仓库 → Actions → verify → Run workflow。
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -24,5 +24,3 @@ jobs:
 
       - name: Lint
         run: ./gradlew lintDebug
-
-      # 注意：APK 只在 tag 推送时由 release.yml 构建，这里不产出安装包
