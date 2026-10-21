@@ -36,7 +36,7 @@
 
 ## 添加自己的仓库
 
-1. 首页右上角 **＋** → 「克隆仓库」；
+1. 首页右下角 **「+ 克隆仓库」** 按钮；
 2. 填 HTTPS 地址，例如 `https://github.com/owner/repo.git`；
 3. 公开仓库直接点「开始克隆」；私有仓库补 Token（GitHub 用 fine-grained PAT，contents 只读即可）；
 4. 克隆完成后会自动进入仓库，之后可离线浏览、编辑、提交。

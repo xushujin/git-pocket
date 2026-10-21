@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -365,5 +366,34 @@ fun GpLoading(text: String = "加载中…") {
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = typography.body, color = palette.contentSecondary)
+    }
+}
+
+/** 主操作悬浮按钮：带文字的扩展 FAB，比纯图标更容易被发现。 */
+@Composable
+fun GpExtendedFab(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    Row(
+        modifier = modifier
+            .height(52.dp)
+            .neumorphicRaised(RoundedCornerShape(26.dp), depth = 8.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = null,
+            tint = palette.accent,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text = text, style = typography.bodyStrong, color = palette.accent)
     }
 }

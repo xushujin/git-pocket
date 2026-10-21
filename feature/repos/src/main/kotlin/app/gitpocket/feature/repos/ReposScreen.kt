@@ -1,6 +1,8 @@
 package app.gitpocket.feature.repos
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpBadge
 import app.gitpocket.core.designsystem.GpCard
 import app.gitpocket.core.designsystem.GpEmptyState
+import app.gitpocket.core.designsystem.GpExtendedFab
 import app.gitpocket.core.designsystem.GpIconButton
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpScreen
@@ -55,33 +57,44 @@ fun ReposScreen(
             title = "GitPocket",
             subtitle = "口袋里的 Git 管理器",
             actions = {
-                GpIconButton(Icons.Default.Add, "克隆仓库", onOpenClone)
                 GpIconButton(Icons.Default.Settings, "设置", onOpenSettings)
             },
         )
 
-        when {
-            state.loading -> GpLoading("正在准备本地仓库…")
-            state.error != null -> GpEmptyState(
-                title = "加载失败",
-                description = state.error.orEmpty(),
-            )
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            when {
+                state.loading -> GpLoading("正在准备本地仓库…")
+                state.error != null -> GpEmptyState(
+                    title = "加载失败",
+                    description = state.error.orEmpty(),
+                )
 
-            state.repos.isEmpty() -> GpEmptyState(
-                title = "还没有仓库",
-                description = "用 HTTPS 地址克隆一个仓库开始（公开仓库无需 token）。",
-                actionLabel = "克隆仓库",
-                onAction = onOpenClone,
-            )
+                state.repos.isEmpty() -> GpEmptyState(
+                    title = "还没有仓库",
+                    description = "用 HTTPS 地址克隆一个仓库开始（公开仓库无需 token）。",
+                    actionLabel = "克隆仓库",
+                    onAction = onOpenClone,
+                )
 
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.repos, key = { it.id.value }) { repo ->
-                    RepoCard(repo = repo, onClick = { onOpenRepo(repo.id.value) })
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.repos, key = { it.id.value }) { repo ->
+                        RepoCard(repo = repo, onClick = { onOpenRepo(repo.id.value) })
+                    }
                 }
+            }
+
+            if (!state.loading && state.error == null && state.repos.isNotEmpty()) {
+                GpExtendedFab(
+                    text = "克隆仓库",
+                    onClick = onOpenClone,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 20.dp),
+                )
             }
         }
     }
