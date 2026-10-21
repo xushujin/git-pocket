@@ -15,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,13 +28,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.gitpocket.core.common.markdown.MarkdownParser
+import app.gitpocket.core.common.syntax.Language
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.data.LocalSettingsRepository
 import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpIconButton
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpScreen
+import app.gitpocket.core.designsystem.GpTextButton
 import app.gitpocket.core.designsystem.GpTopBar
+import app.gitpocket.core.designsystem.MarkdownView
+import app.gitpocket.core.designsystem.rememberSyntaxTransformation
 import app.gitpocket.core.designsystem.LocalGitPocketTypography
 import app.gitpocket.core.designsystem.LocalNeumorphicPalette
 import app.gitpocket.core.model.RepoId
@@ -56,6 +63,9 @@ fun EditorScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
+    val language = remember(path) { Language.fromPath(path) }
+    val isMarkdown = language == Language.MARKDOWN
+    var preview by remember { mutableStateOf(false) }
 
     BackHandler(enabled = state.dirty) {
         viewModel.save()
@@ -79,6 +89,12 @@ fun EditorScreen(
             },
             onBack = onBack,
             actions = {
+                if (isMarkdown) {
+                    GpTextButton(
+                        text = if (preview) "编辑" else "预览",
+                        onClick = { preview = !preview },
+                    )
+                }
                 GpIconButton(
                     icon = Icons.Default.Check,
                     contentDescription = "保存",
@@ -91,6 +107,19 @@ fun EditorScreen(
         when {
             state.loading -> GpLoading("正在打开文件…")
             state.error != null -> GpEmptyState("无法打开", state.error.orEmpty())
+            isMarkdown && preview -> {
+                val blocks = remember(state.content) { MarkdownParser.parse(state.content) }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    MarkdownView(blocks = blocks)
+                }
+            }
+
             else -> {
                 val lineStyle = typography.mono.copy(
                     fontFamily = FontFamily.Monospace,
@@ -98,6 +127,7 @@ fun EditorScreen(
                     lineHeight = (state.fontSizeSp + 6).sp,
                 )
                 val verticalScroll = rememberScrollState()
+                val syntax = rememberSyntaxTransformation(state.content, language)
 
                 Row(
                     modifier = Modifier
@@ -125,6 +155,7 @@ fun EditorScreen(
                             .padding(start = 6.dp),
                         textStyle = lineStyle.copy(color = palette.contentPrimary),
                         cursorBrush = SolidColor(palette.accent),
+                        visualTransformation = syntax,
                     )
                 }
 
@@ -136,7 +167,11 @@ fun EditorScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = state.message ?: "${state.lineCount} 行 · ${state.content.length} 字符",
+                        text = state.message ?: if (isMarkdown && preview) {
+                            "预览模式 · 共 ${state.lineCount} 行"
+                        } else {
+                            "${state.lineCount} 行 · ${state.content.length} 字符"
+                        },
                         style = typography.caption,
                         color = palette.contentSecondary,
                         modifier = Modifier.weight(1f),

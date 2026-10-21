@@ -14,6 +14,10 @@
 - Room 数据库（v2）+ 显式迁移 1→2 + schema 导出。
 - AndroidKeyStore AES-256-GCM token 存储。
 - CI：PR 校验、tag 触发签名发布。
+- **语法高亮**：自研词法器（单遍扫描），支持 Kotlin / Java / JS / TS / JSON / XML /
+  Python / Shell / Markdown；编辑器实时高亮，Markdown 代码块同样高亮。
+- **Markdown 预览**：原生 Compose 渲染（标题、段落、列表、引用、分割线、围栏代码块，
+  行内 code/粗体/斜体/删除线/链接样式），非 WebView。
 - **HTTPS 克隆**：smart HTTP v0（pkt-line / side-band-64k / ofs-delta），
   公开仓库与 PAT 私有仓库均可；收到 pack 后拆为 loose object 并检出工作区。
 

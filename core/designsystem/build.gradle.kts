@@ -30,6 +30,7 @@ kotlin {
 
 dependencies {
     api(project(":core:model"))
+    api(project(":core:common"))
     api(libs.androidx.core.ktx)
     api(platform(libs.androidx.compose.bom))
     api(libs.androidx.compose.ui)

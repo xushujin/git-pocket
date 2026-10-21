@@ -4,7 +4,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-export JAVA_HOME="${JAVA_HOME:-$HOME/bin/jdk-21.0.2.jdk/Contents/Home}"
+# 必须锁定 JDK 21：Gradle 8.11.1 不支持 JDK 25，且失败信息只会显示一个 "25"，极难排查
+export JAVA_HOME="${GITPOCKET_JAVA_HOME:-$HOME/bin/jdk-21.0.2.jdk/Contents/Home}"
+if [ ! -x "$JAVA_HOME/bin/java" ]; then
+  echo "找不到 JDK：$JAVA_HOME（可用 GITPOCKET_JAVA_HOME 指定）" >&2
+  exit 1
+fi
+JAVA_VERSION=$("$JAVA_HOME/bin/java" -version 2>&1 | head -1 | sed -E 's/.*"([0-9]+).*/\1/')
+if [ "$JAVA_VERSION" != "21" ]; then
+  echo "需要 JDK 21，当前是 $JAVA_VERSION（$JAVA_HOME）" >&2
+  exit 1
+fi
 SDK="${ANDROID_SDK_ROOT:-$PWD/.tooling/android-sdk}"
 
 if [ ! -f keystore.properties ]; then
