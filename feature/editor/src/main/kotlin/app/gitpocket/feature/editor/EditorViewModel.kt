@@ -38,7 +38,7 @@ class EditorViewModel(
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
     private var autoSaveJob: Job? = null
-    private var autoSaveEnabled = true
+    private var autoSaveEnabled = false
 
     init {
         viewModelScope.launch {
@@ -118,6 +118,16 @@ class EditorViewModel(
                     )
                 }
         }
+    }
+
+    /** 放弃本次未保存的编辑，内容回退到上次保存（或磁盘）的版本。 */
+    fun revert() {
+        autoSaveJob?.cancel()
+        _state.value = _state.value.copy(
+            content = _state.value.original,
+            dirty = false,
+            message = "已撤销未保存的修改",
+        )
     }
 
     fun clearMessage() {

@@ -8,8 +8,16 @@ sealed interface MdBlock {
     data class BulletList(val items: List<String>) : MdBlock
     data class OrderedList(val start: Int, val items: List<String>) : MdBlock
     data class Quote(val text: String) : MdBlock
+    data class Table(
+        val header: List<String>,
+        val aligns: List<ColumnAlign>,
+        val rows: List<List<String>>,
+    ) : MdBlock
+
     data object Divider : MdBlock
 }
+
+enum class ColumnAlign { LEFT, CENTER, RIGHT }
 
 /**
  * 轻量 Markdown 解析（块级）。
@@ -23,6 +31,7 @@ object MarkdownParser {
     private val DIVIDER = Regex("^(-{3,}|\\*{3,}|_{3,})$")
     private val BULLET = Regex("^[-*+]\\s+")
     private val ORDERED = Regex("^\\d+[.)]\\s+")
+    private val ALIGN_CELL = Regex("^:?-{1,}:?$")
 
     fun parse(text: String): List<MdBlock> {
         val blocks = mutableListOf<MdBlock>()
@@ -65,6 +74,13 @@ object MarkdownParser {
                     val match = HEADING.find(trimmed)!!
                     blocks.add(MdBlock.Heading(match.groupValues[1].length, match.groupValues[2].trim()))
                     i++
+                }
+
+                parseTable(lines, i) != null -> {
+                    flushParagraph()
+                    val (table, next) = parseTable(lines, i)!!
+                    blocks.add(table)
+                    i = next
                 }
 
                 DIVIDER.matches(trimmed) -> {
@@ -119,4 +135,38 @@ object MarkdownParser {
         flushParagraph()
         return blocks
     }
+
+    /** 识别 `| a | b |` + `|---|---|` 形式的表格；不是表格返回 null。 */
+    private fun parseTable(lines: List<String>, start: Int): Pair<MdBlock.Table, Int>? {
+        if (start + 1 >= lines.size) return null
+        val headerLine = lines[start]
+        if (!headerLine.contains('|')) return null
+
+        val separatorCells = splitRow(lines[start + 1])
+        if (separatorCells.isEmpty() || !separatorCells.all { ALIGN_CELL.matches(it) }) return null
+
+        val header = splitRow(headerLine)
+        if (header.size != separatorCells.size) return null
+
+        val aligns = separatorCells.map { cell ->
+            when {
+                cell.startsWith(":") && cell.endsWith(":") -> ColumnAlign.CENTER
+                cell.endsWith(":") -> ColumnAlign.RIGHT
+                else -> ColumnAlign.LEFT
+            }
+        }
+
+        val rows = mutableListOf<List<String>>()
+        var index = start + 2
+        while (index < lines.size) {
+            val line = lines[index]
+            if (line.isBlank() || !line.contains('|')) break
+            rows.add(splitRow(line))
+            index++
+        }
+        return MdBlock.Table(header, aligns, rows) to index
+    }
+
+    private fun splitRow(line: String): List<String> =
+        line.trim().removePrefix("|").removeSuffix("|").split('|').map { it.trim() }
 }

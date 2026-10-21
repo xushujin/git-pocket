@@ -203,6 +203,56 @@ class GitRepo private constructor(
         return blob.text()
     }
 
+    /**
+     * 撤销单个文件的工作区修改：
+     * - HEAD 里有该文件 -> 用 HEAD 版本覆盖工作区，并同步 index（避免残留 modified）；
+     * - HEAD 里没有（新增/未跟踪）-> 直接删除文件。
+     * 返回 true 表示已撤销。
+     */
+    fun discardWorkFile(path: String): Boolean {
+        val entry = headCommit()?.let { flattenTree(it.tree)[path] }
+        val file = File(workTree, path)
+
+        if (entry == null) {
+            return file.delete()
+        }
+
+        val blob = objects.read(entry.oid) as? GitBlob ?: return false
+        file.parentFile?.mkdirs()
+
+        if (entry.mode == GitTreeEntry.MODE_SYMLINK) {
+            file.delete()
+            val target = String(blob.content, StandardCharsets.UTF_8)
+            val created = runCatching {
+                java.nio.file.Files.createSymbolicLink(file.toPath(), java.nio.file.Paths.get(target))
+            }.isSuccess
+            if (!created) file.writeBytes(blob.content)
+        } else {
+            file.writeBytes(blob.content)
+            if (entry.mode == GitTreeEntry.MODE_EXECUTABLE) file.setExecutable(true, true)
+        }
+
+        val last = file.lastModified()
+        val seconds = last / 1000
+        val nanos = ((last % 1000) * 1_000_000).toInt()
+        val index = GitIndex.read(indexFile)
+        index.put(
+            IndexEntry(
+                path = path,
+                oid = entry.oid,
+                mode = entry.mode,
+                stage = 0,
+                size = blob.content.size.toLong(),
+                mtimeSeconds = seconds,
+                mtimeNanos = nanos,
+                ctimeSeconds = seconds,
+                ctimeNanos = nanos,
+            )
+        )
+        index.writeTo(indexFile)
+        return true
+    }
+
     fun diffWorktree(path: String): FileDiff {
         val file = File(workTree, path)
         if (!file.isFile) return FileDiff(path, false, emptyList(), 0, 0)

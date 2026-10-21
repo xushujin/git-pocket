@@ -1,5 +1,6 @@
 package app.gitpocket.core.designsystem
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,16 +18,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.gitpocket.core.common.markdown.ColumnAlign
 import app.gitpocket.core.common.markdown.MdBlock
 import app.gitpocket.core.common.syntax.Language
 
@@ -112,8 +117,63 @@ fun MarkdownView(blocks: List<MdBlock>, modifier: Modifier = Modifier) {
                     )
                 }
 
+                is MdBlock.Table -> MarkdownTable(block)
+
                 MdBlock.Divider -> GpDivider()
             }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownTable(table: MdBlock.Table) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphicInset(RoundedCornerShape(12.dp)),
+    ) {
+        TableRow(cells = table.header, aligns = table.aligns, header = true)
+        table.rows.forEach { row ->
+            TableRow(cells = row, aligns = table.aligns, header = false)
+        }
+    }
+}
+
+@Composable
+private fun TableRow(cells: List<String>, aligns: List<ColumnAlign>, header: Boolean) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    val columnCount = maxOf(cells.size, aligns.size, 1)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (header) palette.accent.copy(alpha = 0.10f) else Color.Transparent)
+            .drawBehind {
+                drawLine(
+                    color = palette.contentSecondary.copy(alpha = 0.18f),
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            },
+    ) {
+        repeat(columnCount) { index ->
+            val cell = cells.getOrNull(index).orEmpty()
+            val align = aligns.getOrNull(index) ?: ColumnAlign.LEFT
+            Text(
+                text = inline(cell, palette),
+                style = if (header) typography.bodyStrong else typography.body,
+                color = if (header) palette.accent else palette.contentPrimary,
+                textAlign = when (align) {
+                    ColumnAlign.LEFT -> TextAlign.Start
+                    ColumnAlign.CENTER -> TextAlign.Center
+                    ColumnAlign.RIGHT -> TextAlign.End
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            )
         }
     }
 }

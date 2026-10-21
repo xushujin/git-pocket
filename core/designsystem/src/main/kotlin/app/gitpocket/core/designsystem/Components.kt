@@ -397,3 +397,35 @@ fun GpExtendedFab(
         Text(text = text, style = typography.bodyStrong, color = palette.accent)
     }
 }
+
+/** 通用二次确认弹窗（Material3 AlertDialog，配色跟随主题）。 */
+@Composable
+fun GpConfirmDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    dismissText: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = palette.base,
+        title = { Text(title, style = typography.title, color = palette.contentPrimary) },
+        text = { Text(message, style = typography.body, color = palette.contentSecondary) },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onConfirm) {
+                Text(confirmText, style = typography.bodyStrong, color = palette.accent)
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text(dismissText, style = typography.body, color = palette.danger)
+            }
+        },
+    )
+}

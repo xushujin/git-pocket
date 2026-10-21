@@ -61,6 +61,17 @@ class RepoDetailViewModel(
         }
     }
 
+    /** 撤销某个文件的修改；未跟踪文件会被删除。 */
+    fun discard(path: String) {
+        viewModelScope.launch {
+            runCatching { repository.discard(repoId, path) }
+                .onSuccess { refresh(silent = true) }
+                .onFailure {
+                    _state.value = _state.value.copy(message = it.message ?: "撤销失败：$path")
+                }
+        }
+    }
+
     fun stageAll() {
         viewModelScope.launch {
             runCatching { repository.stageAll(repoId) }

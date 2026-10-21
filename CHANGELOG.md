@@ -18,10 +18,17 @@
   Python / Shell / Markdown；编辑器实时高亮，Markdown 代码块同样高亮。
 - **Markdown 预览**：原生 Compose 渲染（标题、段落、列表、引用、分割线、围栏代码块，
   行内 code/粗体/斜体/删除线/链接样式），非 WebView。
+- **Markdown 表格**：`| a | b |` + `|---|` 解析与渲染，支持左/中/右对齐。
+- **手动保存**：默认关闭自动保存，离开编辑器前弹出「保存并退出 / 放弃修改」确认。
+- **撤销未保存修改**：编辑器底部「撤销」，一键回到上次保存的版本。
+- **按文件撤销变更**：变更列表每个文件都有「撤销」，恢复到 HEAD；新增文件则删除。
 - **HTTPS 克隆**：smart HTTP v0（pkt-line / side-band-64k / ofs-delta），
   公开仓库与 PAT 私有仓库均可；收到 pack 后拆为 loose object 并检出工作区。
 
 ### Fixed
+
+- 从编辑器返回仓库详情时页签被重置到「变更」：改用 rememberSaveable，返回后停留在原页签。
+- 撤销文件变更后编辑器仍显示旧内容：撤销时同步删除该文件的草稿。
 
 - 首次启动崩溃：`repo` 表插入时 `accountId="local"` 没有对应账号行，触发
   `SQLITE_CONSTRAINT_FOREIGNKEY (787)`。现在先落本地账号行再插仓库，并让种子逻辑幂等

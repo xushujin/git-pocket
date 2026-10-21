@@ -32,6 +32,7 @@ import app.gitpocket.core.common.markdown.MarkdownParser
 import app.gitpocket.core.common.syntax.Language
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.data.LocalSettingsRepository
+import app.gitpocket.core.designsystem.GpConfirmDialog
 import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpIconButton
 import app.gitpocket.core.designsystem.GpLoading
@@ -66,11 +67,11 @@ fun EditorScreen(
     val language = remember(path) { Language.fromPath(path) }
     val isMarkdown = language == Language.MARKDOWN
     var preview by remember { mutableStateOf(false) }
+    var exitDialog by remember { mutableStateOf(false) }
+    var revertDialog by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = state.dirty) {
-        viewModel.save()
-        onBack()
-    }
+    // 有未保存修改时拦截返回，交给用户确认；不直接静默保存
+    BackHandler(enabled = state.dirty) { exitDialog = true }
 
     LaunchedEffect(state.message) {
         if (state.message != null) {
@@ -162,8 +163,7 @@ fun EditorScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClick = onOpenDiff)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -174,15 +174,63 @@ fun EditorScreen(
                         },
                         style = typography.caption,
                         color = palette.contentSecondary,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
                     )
+                    if (state.dirty) {
+                        Text(
+                            text = "撤销",
+                            style = typography.caption,
+                            color = palette.danger,
+                            modifier = Modifier
+                                .clickable { revertDialog = true }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        )
+                    }
                     Text(
                         text = "查看 diff",
                         style = typography.caption,
                         color = palette.accent,
+                        modifier = Modifier
+                            .clickable(onClick = onOpenDiff)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                     )
                 }
             }
         }
+    }
+
+    if (exitDialog) {
+        GpConfirmDialog(
+            title = "有未保存的修改",
+            message = "保存后再离开，还是放弃这次修改？",
+            confirmText = "保存并退出",
+            dismissText = "放弃修改",
+            onConfirm = {
+                exitDialog = false
+                viewModel.save()
+                onBack()
+            },
+            onDismiss = {
+                exitDialog = false
+                viewModel.revert()
+                onBack()
+            },
+            onCancel = { exitDialog = false },
+        )
+    }
+
+    if (revertDialog) {
+        GpConfirmDialog(
+            title = "撤销未保存的修改",
+            message = "内容会回到上次保存的版本，这一步不能撤销。",
+            confirmText = "撤销修改",
+            dismissText = "取消",
+            onConfirm = {
+                revertDialog = false
+                viewModel.revert()
+            },
+            onDismiss = { revertDialog = false },
+            onCancel = { revertDialog = false },
+        )
     }
 }

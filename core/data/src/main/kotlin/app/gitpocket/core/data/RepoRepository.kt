@@ -215,6 +215,18 @@ class RepoRepository(
         }
     }
 
+    /**
+     * 撤销单个文件的修改（恢复到 HEAD，未跟踪文件则删除）。
+     * 同时清掉该文件的草稿，否则编辑器下次打开还会显示被撤销的内容。
+     */
+    suspend fun discard(repoId: RepoId, path: String): Boolean {
+        val discarded = write(repoId) { it.discardWorkFile(path) }
+        if (discarded) {
+            withContext(dispatchers.io) { draftDao.delete(repoId.value, path) }
+        }
+        return discarded
+    }
+
     suspend fun stageAll(repoId: RepoId) = write(repoId) { it.stageAll() }
 
     suspend fun commit(repoId: RepoId, message: String): String = withContext(dispatchers.io) {

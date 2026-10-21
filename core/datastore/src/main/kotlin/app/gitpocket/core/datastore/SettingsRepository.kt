@@ -80,9 +80,9 @@ object SettingsSpecs {
         id = "editor.auto_save",
         section = SettingsSection.EDITOR,
         title = "自动保存",
-        description = "停止输入 800ms 后自动落盘",
+        description = "关闭后需要手动点右上角保存（默认关闭）",
         key = booleanPreferencesKey("editor_auto_save"),
-        defaultValue = true,
+        defaultValue = false,
     )
 
     val showLineNumbers = SettingSpec(
@@ -171,7 +171,7 @@ object SettingsSpecs {
 /** 设置快照：UI 一次订阅，避免每项各收一条流。 */
 data class SettingsSnapshot(
     val theme: ThemeSettings = ThemeSettings(),
-    val autoSave: Boolean = true,
+    val autoSave: Boolean = false,
     val showLineNumbers: Boolean = true,
     val tabWidth: Int = 4,
     val authorName: String = "",
@@ -197,7 +197,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     val snapshot: Flow<SettingsSnapshot> = store.data.map { prefs ->
         SettingsSnapshot(
             theme = prefs.toThemeSettings(),
-            autoSave = prefs[SettingsSpecs.autoSave.key] ?: true,
+            autoSave = prefs[SettingsSpecs.autoSave.key] ?: false,
             showLineNumbers = prefs[SettingsSpecs.showLineNumbers.key] ?: true,
             tabWidth = prefs[SettingsSpecs.tabWidth.key] ?: 4,
             authorName = prefs[SettingsSpecs.authorName.key].orEmpty(),

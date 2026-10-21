@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ import app.gitpocket.core.common.Formatters
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpBadge
 import app.gitpocket.core.designsystem.GpCard
+import app.gitpocket.core.designsystem.GpConfirmDialog
 import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpPrimaryButton
@@ -62,7 +64,10 @@ fun RepoDetailScreen(
         factory = viewModelFactory { initializer { RepoDetailViewModel(id, repository) } }
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var tab by remember { mutableStateOf(DetailTab.CHANGES) }
+    // 用 rememberSaveable：从编辑器返回时不会重置到「变更」页（NavHost 会保存该状态）
+    var tabIndex by rememberSaveable { mutableStateOf(0) }
+    val tab = DetailTab.entries[tabIndex]
+    var discardTarget by remember { mutableStateOf<String?>(null) }
 
     // 从编辑器 / 提交页返回时静默刷新，否则会一直显示进入时的旧状态
     LifecycleResumeEffect(Unit) {
@@ -84,8 +89,8 @@ fun RepoDetailScreen(
 
         GpTabRow(
             tabs = DetailTab.entries.map { it.title },
-            selectedIndex = DetailTab.entries.indexOf(tab),
-            onSelect = { tab = DetailTab.entries[it] },
+            selectedIndex = tabIndex,
+            onSelect = { tabIndex = it },
         )
 
         when {
@@ -97,12 +102,29 @@ fun RepoDetailScreen(
                     onOpenFile = onOpenFile,
                     onStageAll = viewModel::stageAll,
                     onCommit = onOpenCommit,
+                    onDiscard = { discardTarget = it },
                 )
 
                 DetailTab.HISTORY -> HistoryTab(state.commits)
                 DetailTab.FILES -> FilesTab(state.entries, onOpenDirectory, onOpenFile)
             }
         }
+    }
+
+    discardTarget?.let { path ->
+        GpConfirmDialog(
+            title = "撤销这个文件的修改？",
+            message = "$path 会恢复到上次提交的版本；如果是新增文件则直接删除。此操作不可撤销。",
+            confirmText = "撤销修改",
+            dismissText = "取消",
+            onConfirm = {
+                val target = path
+                discardTarget = null
+                viewModel.discard(target)
+            },
+            onDismiss = { discardTarget = null },
+            onCancel = { discardTarget = null },
+        )
     }
 }
 
@@ -141,6 +163,7 @@ private fun ColumnScope.ChangesTab(
     onOpenFile: (String) -> Unit,
     onStageAll: () -> Unit,
     onCommit: () -> Unit,
+    onDiscard: (String) -> Unit,
 ) {
     if (changes.isEmpty()) {
         GpEmptyState(
@@ -155,7 +178,11 @@ private fun ColumnScope.ChangesTab(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(changes, key = { "${it.path}-${it.staged}" }) { change ->
-            ChangeRow(change, onClick = { onOpenFile(change.path) })
+            ChangeRow(
+                change = change,
+                onClick = { onOpenFile(change.path) },
+                onDiscard = { onDiscard(change.path) },
+            )
         }
     }
     Row(
@@ -176,7 +203,7 @@ private fun ColumnScope.ChangesTab(
 }
 
 @Composable
-private fun ChangeRow(change: FileChange, onClick: () -> Unit) {
+private fun ChangeRow(change: FileChange, onClick: () -> Unit, onDiscard: () -> Unit) {
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
     val letter = when (change.type) {
@@ -211,6 +238,15 @@ private fun ChangeRow(change: FileChange, onClick: () -> Unit) {
                     color = palette.contentSecondary,
                 )
             }
+            Text(
+                text = "撤销",
+                style = typography.caption,
+                color = palette.danger,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onDiscard)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
         }
     }
 }

@@ -67,3 +67,60 @@ class MarkdownParserTest {
         assertTrue(MarkdownParser.parse("\n\n").isEmpty())
     }
 }
+
+class MarkdownTableTest {
+
+    @Test
+    fun `解析表头 分隔行与数据行`() {
+        val md = """
+            | 名称 | 状态 |
+            | --- | --- |
+            | 构建 | 通过 |
+            | 测试 | 通过 |
+        """.trimIndent()
+
+        val table = MarkdownParser.parse(md).single() as MdBlock.Table
+        assertEquals(listOf("名称", "状态"), table.header)
+        assertEquals(2, table.rows.size)
+        assertEquals(listOf("构建", "通过"), table.rows[0])
+        assertEquals(listOf(ColumnAlign.LEFT, ColumnAlign.LEFT), table.aligns)
+    }
+
+    @Test
+    fun `解析对齐方式`() {
+        val md = """
+            | a | b | c |
+            |:--|:-:|--:|
+            | 1 | 2 | 3 |
+        """.trimIndent()
+
+        val table = MarkdownParser.parse(md).single() as MdBlock.Table
+        assertEquals(
+            listOf(ColumnAlign.LEFT, ColumnAlign.CENTER, ColumnAlign.RIGHT),
+            table.aligns,
+        )
+    }
+
+    @Test
+    fun `表格遇到空行结束`() {
+        val md = """
+            | a | b |
+            | --- | --- |
+            | 1 | 2 |
+
+            普通段落
+        """.trimIndent()
+
+        val blocks = MarkdownParser.parse(md)
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is MdBlock.Table)
+        assertEquals(1, (blocks[0] as MdBlock.Table).rows.size)
+        assertTrue(blocks[1] is MdBlock.Paragraph)
+    }
+
+    @Test
+    fun `没有分隔行的竖线文本不算表格`() {
+        val blocks = MarkdownParser.parse("a | b | c")
+        assertTrue(blocks.single() is MdBlock.Paragraph)
+    }
+}
