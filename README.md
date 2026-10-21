@@ -78,6 +78,24 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 | Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/GitPocket.apk` |
 | Release AAB | `./gradlew :app:bundleRelease` | `app/build/outputs/bundle/release/app-release.aab` |
 | 全量校验 | `./gradlew test lint assembleDebug` | 测试报告 + lint 报告 |
+| **验收包** | `./scripts/build-release.sh` | `GitPocket.apk` + 版本号/签名/SHA-256 一览 |
+
+## 交付约定（重要）
+
+**日常验收一律给 release 包**，不给 debug 包。
+
+```bash
+./scripts/build-release.sh
+```
+
+脚本会打印版本号、路径、大小、SHA-256、签名指纹和 mapping 路径。
+
+- 版本号：有 tag 时用 tag（`v0.1.0` → `0.1.0`）；无 tag 时用构建时间戳
+  （`0.1.0-dev.261021.0913`，versionCode 取 `yyMMddHH`），保证每次交付可区分、可覆盖安装。
+- 签名：本机 keystore 在 `~/.gitpocket/keys/gitpocket-release.jks`（不进版本库）。
+  **换 key 就必须卸载重装**，所以这个文件务必备份。
+- 崩溃日志：release 开了 R8，堆栈需用 `app/build/outputs/mapping/release/mapping.txt` 还原。
+  报问题时请带上版本号（设置 → 关于 里能看到）。
 
 ## 签名流程
 
@@ -89,6 +107,8 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 cp keystore.properties.example keystore.properties
 # 编辑并填入真实路径与密码（该文件已在 .gitignore 中）
 ```
+
+本机当前使用 `~/.gitpocket/keys/gitpocket-release.jks`（与已交付的验收包同一把 key）。
 
 ```properties
 storeFile=/absolute/path/to/release.jks

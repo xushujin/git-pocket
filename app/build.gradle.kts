@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 plugins {
@@ -28,16 +31,28 @@ val releaseSigningProps: Properties? = run {
 }
 
 // 版本号唯一真源：git tag（v1.2.3 -> versionName 1.2.3 / versionCode 10203）。
-// 本地无 tag 时使用 0.0.0-dev + versionCode 1，避免本地包覆盖线上包。
-val gitTag: String = System.getenv("GIT_TAG") ?: "v0.0.0-dev"
-val versionNameValue: String = gitTag.removePrefix("v")
-val versionCodeValue: Int = run {
-    val parts = versionNameValue.split("-").first().split(".")
+// 无 tag 时（本地验收包）用构建时间戳，保证每次交付的包可区分、versionCode 单调递增，
+// 这样覆盖安装不会被系统拒绝。
+val gitTag: String = System.getenv("GIT_TAG").orEmpty()
+val buildStamp: String = SimpleDateFormat("yyMMdd.HHmm", Locale.US)
+    .format(Date())
+val versionNameValue: String = if (gitTag.isNotBlank()) {
+    gitTag.removePrefix("v")
+} else {
+    "0.1.0-dev.$buildStamp"
+}
+val versionCodeValue: Int = if (gitTag.isNotBlank()) {
+    val parts = gitTag.removePrefix("v").split("-").first().split(".")
     if (parts.size == 3 && parts.all { it.toIntOrNull() != null }) {
         (parts[0].toInt() * 10_000 + parts[1].toInt() * 100 + parts[2].toInt()).coerceAtLeast(1)
     } else {
         1
     }
+} else {
+    // yyMMddHH：小时级单调，且远小于 Int.MAX_VALUE
+    SimpleDateFormat("yyMMddHH", Locale.US)
+        .format(Date())
+        .toInt()
 }
 
 android {
