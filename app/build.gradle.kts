@@ -41,19 +41,11 @@ val versionNameValue: String = if (gitTag.isNotBlank()) {
 } else {
     "0.1.0-dev.$buildStamp"
 }
-val versionCodeValue: Int = if (gitTag.isNotBlank()) {
-    val parts = gitTag.removePrefix("v").split("-").first().split(".")
-    if (parts.size == 3 && parts.all { it.toIntOrNull() != null }) {
-        (parts[0].toInt() * 10_000 + parts[1].toInt() * 100 + parts[2].toInt()).coerceAtLeast(1)
-    } else {
-        1
-    }
-} else {
-    // yyMMddHH：小时级单调，且远小于 Int.MAX_VALUE
-    SimpleDateFormat("yyMMddHH", Locale.US)
-        .format(Date())
-        .toInt()
-}
+// versionCode 始终取构建时间戳（yyMMddHH）：tag 派生的数字（v1.0.0 -> 10000）
+// 会小于开发包（26xxxxxx），导致正式包无法覆盖安装。versionName 仍由 tag 决定。
+val versionCodeValue: Int = SimpleDateFormat("yyMMddHH", Locale.US)
+    .format(Date())
+    .toInt()
 
 android {
     namespace = "app.gitpocket"
