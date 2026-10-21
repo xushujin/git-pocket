@@ -27,13 +27,21 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -208,11 +216,27 @@ fun GpTextField(
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
     val style = textStyle ?: typography.body
+
+    // 本地缓冲：输入时立刻反映到界面，不等外部状态回写。
+    // 外部值（DataStore → Flow → 重组）通常比输入慢一拍，若直接绑定字符串，
+    // 迟到的旧值会把光标重置到开头（"输入第二个字光标跑到第一个字前面"）。
+    var buffer by remember { mutableStateOf(TextFieldValue(value)) }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(value, focused) {
+        if (!focused && value != buffer.text) {
+            buffer = TextFieldValue(value, selection = TextRange(value.length))
+        }
+    }
+
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = buffer,
+        onValueChange = { newValue ->
+            buffer = newValue
+            onValueChange(newValue.text)
+        },
         modifier = modifier
             .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
             .clip(RoundedCornerShape(14.dp))
             .neumorphicInset(RoundedCornerShape(14.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
