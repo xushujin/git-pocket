@@ -26,14 +26,13 @@ fi
 echo "== 构建 release =="
 ./gradlew :app:assembleRelease --console=plain "$@"
 
-APK=app/build/outputs/apk/release/GitPocket.apk
-MAPPING=app/build/outputs/mapping/release/mapping.txt
-META=app/build/outputs/apk/release/output-metadata.json
-
-if [ ! -f "$APK" ]; then
-  echo "构建结束但没有找到 $APK" >&2
+APK=$(ls app/build/outputs/apk/release/GitPocket-*.apk 2>/dev/null | head -1)
+if [ -z "$APK" ]; then
+  echo "构建结束但没有找到 GitPocket-*.apk" >&2
   exit 1
 fi
+MAPPING=app/build/outputs/mapping/release/mapping.txt
+META=app/build/outputs/apk/release/output-metadata.json
 
 echo
 echo "== 验收信息 =="

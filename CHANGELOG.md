@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-21
+
+### 变更
+
+- Release 产物名带版本号：`GitPocket-1.0.1.apk`（之前固定为 `GitPocket.apk`）。
+- Release 不再上传 AAB：不走 Google Play，AAB 无用途，CI 也少跑一个 `bundleRelease`。
+- `mapping.txt` 改为 gzip 上传（26 MB → 1.9 MB），还原堆栈前先 `gunzip`。
+
 ## [1.0.0] - 2026-10-21
 
 首个可验收版本：自研 Git 内核 + 完整本地工作流 + HTTPS 克隆。
@@ -38,7 +46,7 @@
 
 - PR：单元测试 + lint（不产出 APK）
 - tag：签名构建 → 校验签名 → 自动创建 GitHub Release
-- APK 命名 `GitPocket.apk` / `GitPocket-debug.apk`
+- APK 命名 `GitPocket-<版本>.apk` / `GitPocket-debug.apk`
 - 版本号：tag 决定 versionName，versionCode 取构建时间戳（保证可覆盖安装）
 
 ### 修复

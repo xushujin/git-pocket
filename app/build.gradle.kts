@@ -120,13 +120,17 @@ kotlin {
     }
 }
 
-// 产物命名与应用名一致：GitPocket.apk / GitPocket-debug.apk
+// 产物命名：release 带版本号（GitPocket-1.0.1.apk），debug 保持简短（GitPocket-debug.apk）
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
             // AGP 8.9 的公开 VariantOutput 还没有 outputFileName，只能用 impl 设置
             (output as com.android.build.api.variant.impl.VariantOutputImpl).outputFileName.set(
-                if (variant.buildType == "debug") "GitPocket-debug.apk" else "GitPocket.apk"
+                if (variant.buildType == "debug") {
+                    "GitPocket-debug.apk"
+                } else {
+                    "GitPocket-$versionNameValue.apk"
+                }
             )
         }
     }

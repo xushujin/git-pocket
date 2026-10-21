@@ -79,10 +79,10 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 | 任务 | 命令 | 产物 |
 |---|---|---|
 | Debug | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/GitPocket-debug.apk` |
-| Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/GitPocket.apk` |
+| Release APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/GitPocket-<版本>.apk` |
 | Release AAB（可选，仅上架 Play 需要） | `./gradlew :app:bundleRelease` | `app/build/outputs/bundle/release/app-release.aab` |
 | 全量校验 | `./gradlew test lint assembleDebug` | 测试报告 + lint 报告 |
-| **验收包** | `./scripts/build-release.sh` | `GitPocket.apk` + 版本号/签名/SHA-256 一览 |
+| **验收包** | `./scripts/build-release.sh` | `GitPocket-<版本>.apk` + 版本号/签名/SHA-256 一览 |
 
 ## 交付约定（重要）
 
@@ -142,7 +142,7 @@ keyPassword=******
    git tag v0.1.0 && git push origin v0.1.0
    ```
 4. CI 自动执行：单测 → lint → 签名构建 → `apksigner verify` 校验证书 → 创建 GitHub Release；
-5. 人工检查 Release 资产：`GitPocket.apk`、`GitPocket.apk.sha256`、`mapping.txt.gz`；
+5. 人工检查 Release 资产：`GitPocket-<版本>.apk`、`GitPocket-<版本>.apk.sha256`、`mapping.txt.gz`；
 6. 手动上架（首版不做自动上架，避免误发）。
 
 版本号唯一真源是 tag：`v1.2.3` → `versionName=1.2.3`、`versionCode=10203`。本地无 tag 时为 `0.0.0-dev`。
