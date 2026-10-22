@@ -32,4 +32,21 @@ sealed class GitException(message: String, cause: Throwable? = null) : Exception
 
     /** 本地分支落后于远端：必须先拉取再推送。 */
     class NonFastForward(val ref: String) : GitException("远端有本地没有的提交，请先拉取：$ref")
+
+    /** 工作区有未提交改动，切换分支 / 合并前必须先处理。 */
+    class DirtyWorkTree(val count: Int) :
+        GitException("还有 $count 个文件未提交，请先提交或撤销后再操作")
+
+    /** 有未完成的合并（存在冲突待解决）。 */
+    class MergeInProgress : GitException("还有冲突没解决，请先解决或放弃本次合并")
+
+    /** 分支已存在。 */
+    class BranchExists(val name: String) : GitException("分支已存在：$name")
+
+    /** 分支名不合法。 */
+    class InvalidBranchName(val name: String) : GitException("分支名不合法：$name")
+
+    /** 合并会覆盖未跟踪文件：与 git 一致，直接拒绝而不是静默覆盖。 */
+    class UntrackedOverwrite(val paths: List<String>) :
+        GitException("这些未跟踪文件会被覆盖，请先移走：${paths.joinToString("、")}")
 }

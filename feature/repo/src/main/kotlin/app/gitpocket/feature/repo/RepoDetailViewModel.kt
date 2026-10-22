@@ -3,8 +3,11 @@ package app.gitpocket.feature.repo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.gitpocket.core.data.RepoRepository
+import app.gitpocket.core.git.ConflictStrategy
 import app.gitpocket.core.git.GitException
+import app.gitpocket.core.git.MergeStatus
 import app.gitpocket.core.git.transport.SyncProgress
+import app.gitpocket.core.model.Branch
 import app.gitpocket.core.model.CommitSummary
 import app.gitpocket.core.model.FileChange
 import app.gitpocket.core.model.FileEntry
@@ -27,6 +30,16 @@ data class SyncState(
     val error: String? = null,
 )
 
+/** 分支弹窗状态。 */
+data class BranchState(
+    val visible: Boolean = false,
+    val local: List<Branch> = emptyList(),
+    val remote: List<Branch> = emptyList(),
+    val newName: String = "",
+    val busy: Boolean = false,
+    val error: String? = null,
+)
+
 data class RepoDetailUiState(
     val loading: Boolean = true,
     val repo: Repo? = null,
@@ -34,9 +47,12 @@ data class RepoDetailUiState(
     val changes: List<FileChange> = emptyList(),
     val commits: List<CommitSummary> = emptyList(),
     val entries: List<FileEntry> = emptyList(),
+    val conflicts: List<String> = emptyList(),
+    val merging: Boolean = false,
     val error: String? = null,
     val message: String? = null,
     val sync: SyncState = SyncState(),
+    val branchState: BranchState = BranchState(),
 )
 
 class RepoDetailViewModel(
@@ -72,6 +88,113 @@ class RepoDetailViewModel(
         _state.value = _state.value.copy(sync = _state.value.sync.copy(visible = false))
     }
 
+    // ---------------------------------------------------------------- 分支
+
+    fun openBranches() {
+        _state.value = _state.value.copy(branchState = BranchState(visible = true))
+        viewModelScope.launch {
+            runCatching {
+                repository.branches(repoId) to repository.remoteBranches(repoId)
+            }.onSuccess { (local, remote) ->
+                _state.value = _state.value.copy(
+                    branchState = _state.value.branchState.copy(local = local, remote = remote),
+                )
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    branchState = _state.value.branchState.copy(error = it.friendlyMessage()),
+                )
+            }
+        }
+    }
+
+    fun closeBranches() {
+        _state.value = _state.value.copy(branchState = BranchState())
+    }
+
+    fun onNewBranchNameChange(value: String) {
+        _state.value = _state.value.copy(
+            branchState = _state.value.branchState.copy(newName = value, error = null),
+        )
+    }
+
+    fun createBranch() {
+        val name = _state.value.branchState.newName.trim()
+        if (name.isEmpty()) {
+            _state.value = _state.value.copy(
+                branchState = _state.value.branchState.copy(error = "请输入分支名"),
+            )
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                branchState = _state.value.branchState.copy(busy = true, error = null),
+            )
+            runCatching { repository.createBranch(repoId, name, checkout = true) }
+                .onSuccess {
+                    _state.value = _state.value.copy(branchState = BranchState())
+                    refresh()
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchState = _state.value.branchState.copy(
+                            busy = false,
+                            error = it.friendlyMessage(),
+                        ),
+                    )
+                }
+        }
+    }
+
+    fun checkoutBranch(name: String) {
+        if (name == _state.value.branch) {
+            closeBranches()
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                branchState = _state.value.branchState.copy(busy = true, error = null),
+            )
+            runCatching { repository.checkoutBranch(repoId, name) }
+                .onSuccess {
+                    _state.value = _state.value.copy(branchState = BranchState())
+                    refresh()
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchState = _state.value.branchState.copy(
+                            busy = false,
+                            error = it.friendlyMessage(),
+                        ),
+                    )
+                }
+        }
+    }
+
+    /** 从远端分支建一个同名本地分支并切过去。 */
+    fun checkoutRemote(remoteName: String) {
+        val local = remoteName.substringAfterLast('/')
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                branchState = _state.value.branchState.copy(busy = true, error = null),
+            )
+            runCatching {
+                repository.createBranch(repoId, local, checkout = true)
+            }.onSuccess {
+                _state.value = _state.value.copy(branchState = BranchState())
+                refresh()
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    branchState = _state.value.branchState.copy(
+                        busy = false,
+                        error = it.friendlyMessage(),
+                    ),
+                )
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 同步
+
     /** 拉取 / 推送共用一条状态机：running 时按钮禁用，结束后刷新页面数据。 */
     fun runSync(action: SyncAction) {
         if (_state.value.sync.running) return
@@ -84,9 +207,12 @@ class RepoDetailViewModel(
                     SyncAction.PULL -> {
                         val r = repository.pull(repoId) { publishProgress(it) }
                         when {
+                            r.conflicts.isNotEmpty() ->
+                                "有 ${r.conflicts.size} 个文件冲突，去「变更」里逐个解决"
                             r.upToDate -> "已是最新，没有需要拉取的内容"
                             r.fastForwarded -> "已更新到 ${r.branch}（新增 ${r.newObjects} 个对象）"
-                            else -> "本地与远端已分叉，无法快进；需要先处理分叉再拉取"
+                            r.merged -> "已合并 origin/${r.branch}（产生一个合并提交）"
+                            else -> "拉取完成"
                         }
                     }
 
@@ -122,6 +248,51 @@ class RepoDetailViewModel(
         _state.value = _state.value.copy(sync = _state.value.sync.copy(progress = text))
     }
 
+    // ---------------------------------------------------------------- 冲突
+
+    /** 冲突整份选一边。 */
+    fun resolve(path: String, strategy: ConflictStrategy) {
+        viewModelScope.launch {
+            runCatching { repository.resolveConflict(repoId, path, strategy) }
+                .onSuccess { refresh(silent = true) }
+                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+        }
+    }
+
+    /** 手动改完后标记为已解决。 */
+    fun markResolved(path: String) {
+        viewModelScope.launch {
+            runCatching { repository.stageFile(repoId, path) }
+                .onSuccess { refresh(silent = true) }
+                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+        }
+    }
+
+    fun abortMerge() {
+        viewModelScope.launch {
+            runCatching { repository.abortMerge(repoId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(message = "已放弃本次合并")
+                    refresh()
+                }
+                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+        }
+    }
+
+    /** 撤销最近一次提交（soft reset）：改动保留在暂存区，可以改完再提交。 */
+    fun undoLastCommit() {
+        viewModelScope.launch {
+            runCatching { repository.undoLastCommit(repoId) }
+                .onSuccess { parent ->
+                    _state.value = _state.value.copy(
+                        message = if (parent == null) "这是第一个提交，无法撤销" else "已撤销上次提交，改动回到暂存区",
+                    )
+                    refresh(silent = true)
+                }
+                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+        }
+    }
+
     /** silent=true 时保留现有内容，只做后台刷新（用于页面 resume）。 */
     fun refresh(silent: Boolean = false) {
         viewModelScope.launch {
@@ -132,6 +303,8 @@ class RepoDetailViewModel(
                 val changes = repository.status(repoId)
                 val commits = repository.log(repoId, 50)
                 val entries = repository.entries(repoId, "")
+                val conflicts = repository.conflicts(repoId)
+                val merging = repository.isMerging(repoId)
                 RepoDetailUiState(
                     loading = false,
                     repo = repo,
@@ -139,7 +312,12 @@ class RepoDetailViewModel(
                     changes = changes,
                     commits = commits,
                     entries = entries,
+                    conflicts = conflicts,
+                    merging = merging,
+                    // 提示条保留到用户点掉为止（否则"已放弃合并"这类反馈会被这次刷新冲掉）
+                    message = _state.value.message,
                     sync = _state.value.sync,
+                    branchState = _state.value.branchState,
                 )
             }.onSuccess { _state.value = it }
                 .onFailure {
@@ -179,5 +357,10 @@ internal fun Throwable.friendlyMessage(): String = when (this) {
     is GitException.AuthFailed -> "认证失败：token 无效或没有写权限"
     is GitException.RemoteNotFound -> "仓库不存在或无权访问"
     is GitException.Network -> message ?: "网络错误"
+    is GitException.DirtyWorkTree -> message ?: "工作区还有未提交的改动"
+    is GitException.MergeInProgress -> message ?: "还有冲突没解决"
+    is GitException.BranchExists -> message ?: "分支已存在"
+    is GitException.InvalidBranchName -> message ?: "分支名不合法"
+    is GitException.UntrackedOverwrite -> message ?: "有未跟踪文件会被覆盖"
     else -> message ?: "操作失败"
 }

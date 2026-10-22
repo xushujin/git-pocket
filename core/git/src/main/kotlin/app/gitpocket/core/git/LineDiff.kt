@@ -18,7 +18,7 @@ object LineDiff {
     private const val MAX_LINES = 5000
     private const val MAX_EDIT_DISTANCE = 2000
 
-    private sealed interface Op {
+    internal sealed interface Op {
         data class Equal(val oldIndex: Int, val newIndex: Int) : Op
         data class Delete(val oldIndex: Int) : Op
         data class Insert(val newIndex: Int) : Op
@@ -77,11 +77,11 @@ object LineDiff {
      * 按行切分：空文本是 0 行（与 git 一致）；其余保留末尾空元素，
      * 以便"文件末尾换行"的差异仍然可见。
      */
-    private fun splitLines(text: String): List<String> =
+    internal fun splitLines(text: String): List<String> =
         if (text.isEmpty()) emptyList() else text.split("\n")
 
     /** 返回 null 表示超过编辑距离阈值，放弃精细比对。 */
-    private fun computeOps(a: List<String>, b: List<String>): List<Op>? {
+    internal fun computeOps(a: List<String>, b: List<String>): List<Op>? {
         val n = a.size
         val m = b.size
         val max = n + m

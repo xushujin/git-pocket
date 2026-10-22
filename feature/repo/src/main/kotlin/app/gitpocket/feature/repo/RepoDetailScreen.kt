@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,8 +47,10 @@ import app.gitpocket.core.designsystem.GpPrimaryButton
 import app.gitpocket.core.designsystem.GpScreen
 import app.gitpocket.core.designsystem.GpTextButton
 import app.gitpocket.core.designsystem.GpTopBar
+import app.gitpocket.core.designsystem.GpTextField
 import app.gitpocket.core.designsystem.LocalGitPocketTypography
 import app.gitpocket.core.designsystem.LocalNeumorphicPalette
+import app.gitpocket.core.git.ConflictStrategy
 import app.gitpocket.core.model.ChangeType
 import app.gitpocket.core.model.FileChange
 import app.gitpocket.core.model.RepoId
@@ -72,6 +75,7 @@ fun RepoDetailScreen(
     var tabIndex by rememberSaveable { mutableStateOf(0) }
     val tab = DetailTab.entries[tabIndex]
     var discardTarget by remember { mutableStateOf<String?>(null) }
+    var undoCommitTarget by remember { mutableStateOf(false) }
 
     // 从编辑器 / 提交页返回时静默刷新，否则会一直显示进入时的旧状态
     LifecycleResumeEffect(Unit) {
@@ -88,6 +92,7 @@ fun RepoDetailScreen(
                 if (state.changes.isNotEmpty()) {
                     GpBadge("${state.changes.size} 变更")
                 }
+                GpTextButton(text = "分支", onClick = viewModel::openBranches)
                 GpTextButton(text = "同步", onClick = viewModel::openSync)
             },
         )
@@ -98,22 +103,53 @@ fun RepoDetailScreen(
             onSelect = { tabIndex = it },
         )
 
+        if (state.merging) {
+            MergeBanner(
+                conflicts = state.conflicts.size,
+                onAbort = viewModel::abortMerge,
+            )
+        }
+
+        state.message?.let { text ->
+            MessageBanner(text = text, onDismiss = viewModel::clearMessage)
+        }
+
         when {
             state.loading -> GpLoading()
             state.error != null -> GpEmptyState("读取失败", state.error.orEmpty())
             else -> when (tab) {
                 DetailTab.CHANGES -> ChangesTab(
                     changes = state.changes,
+                    conflicts = state.conflicts,
                     onOpenFile = onOpenFile,
                     onStageAll = viewModel::stageAll,
                     onCommit = onOpenCommit,
                     onDiscard = { discardTarget = it },
+                    onResolveOurs = { viewModel.resolve(it, ConflictStrategy.OURS) },
+                    onResolveTheirs = { viewModel.resolve(it, ConflictStrategy.THEIRS) },
+                    onMarkResolved = viewModel::markResolved,
                 )
 
-                DetailTab.HISTORY -> HistoryTab(state.commits)
+                DetailTab.HISTORY -> HistoryTab(
+                    commits = state.commits,
+                    onUndoLastCommit = { undoCommitTarget = true },
+                )
+
                 DetailTab.FILES -> FilesTab(state.entries, onOpenDirectory, onOpenFile)
             }
         }
+    }
+
+    if (state.branchState.visible) {
+        BranchDialog(
+            branch = state.branch,
+            branchState = state.branchState,
+            onNameChange = viewModel::onNewBranchNameChange,
+            onCreate = viewModel::createBranch,
+            onCheckout = viewModel::checkoutBranch,
+            onCheckoutRemote = viewModel::checkoutRemote,
+            onDismiss = viewModel::closeBranches,
+        )
     }
 
     if (state.sync.visible) {
@@ -140,6 +176,39 @@ fun RepoDetailScreen(
             onDismiss = { discardTarget = null },
             onCancel = { discardTarget = null },
         )
+    }
+
+    if (undoCommitTarget) {
+        GpConfirmDialog(
+            title = "撤销最近一次提交？",
+            message = "提交会从历史里移除，改动原样回到暂存区，可以改完重新提交。已推送的提交不建议撤销。",
+            confirmText = "撤销提交",
+            dismissText = "取消",
+            onConfirm = {
+                undoCommitTarget = false
+                viewModel.undoLastCommit()
+            },
+            onDismiss = { undoCommitTarget = false },
+            onCancel = { undoCommitTarget = false },
+        )
+    }
+}
+
+/** 一次性提示条：操作结果 / 失败原因，点一下消失。 */
+@Composable
+private fun MessageBanner(text: String, onDismiss: () -> Unit) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(palette.accent.copy(alpha = 0.12f))
+            .clickable(onClick = onDismiss)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(text, style = typography.caption, color = palette.accent)
     }
 }
 
@@ -175,10 +244,14 @@ private fun GpTabRow(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> 
 @Composable
 private fun ColumnScope.ChangesTab(
     changes: List<FileChange>,
+    conflicts: List<String>,
     onOpenFile: (String) -> Unit,
     onStageAll: () -> Unit,
     onCommit: () -> Unit,
     onDiscard: (String) -> Unit,
+    onResolveOurs: (String) -> Unit,
+    onResolveTheirs: (String) -> Unit,
+    onMarkResolved: (String) -> Unit,
 ) {
     if (changes.isEmpty()) {
         GpEmptyState(
@@ -192,11 +265,14 @@ private fun ColumnScope.ChangesTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(changes, key = { "${it.path}-${it.staged}" }) { change ->
+        items(changes, key = { "${it.path}-${it.staged}-${it.type}" }) { change ->
             ChangeRow(
                 change = change,
                 onClick = { onOpenFile(change.path) },
                 onDiscard = { onDiscard(change.path) },
+                onResolveOurs = { onResolveOurs(change.path) },
+                onResolveTheirs = { onResolveTheirs(change.path) },
+                onMarkResolved = { onMarkResolved(change.path) },
             )
         }
     }
@@ -208,17 +284,26 @@ private fun ColumnScope.ChangesTab(
             text = "全部暂存",
             onClick = onStageAll,
             modifier = Modifier.weight(1f),
+            enabled = conflicts.isEmpty(),
         )
         GpPrimaryButton(
-            text = "去提交",
+            text = if (conflicts.isEmpty()) "去提交" else "先解决冲突",
             onClick = onCommit,
             modifier = Modifier.weight(1f),
+            enabled = conflicts.isEmpty(),
         )
     }
 }
 
 @Composable
-private fun ChangeRow(change: FileChange, onClick: () -> Unit, onDiscard: () -> Unit) {
+private fun ChangeRow(
+    change: FileChange,
+    onClick: () -> Unit,
+    onDiscard: () -> Unit,
+    onResolveOurs: () -> Unit,
+    onResolveTheirs: () -> Unit,
+    onMarkResolved: () -> Unit,
+) {
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
     val letter = when (change.type) {
@@ -248,26 +333,68 @@ private fun ChangeRow(change: FileChange, onClick: () -> Unit, onDiscard: () -> 
             Column(Modifier.weight(1f)) {
                 Text(change.path, style = typography.body, color = palette.contentPrimary)
                 Text(
-                    text = if (change.staged) "已暂存" else "未暂存",
+                    text = when {
+                        change.type == ChangeType.CONFLICT -> "冲突 · 需要选择保留哪一边"
+                        change.staged -> "已暂存"
+                        else -> "未暂存"
+                    },
                     style = typography.caption,
                     color = palette.contentSecondary,
                 )
             }
-            Text(
-                text = "撤销",
-                style = typography.caption,
-                color = palette.danger,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onDiscard)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
+            if (change.type != ChangeType.CONFLICT) {
+                Text(
+                    text = "撤销",
+                    style = typography.caption,
+                    color = palette.danger,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onDiscard)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+
+        if (change.type == ChangeType.CONFLICT) {
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                GpTextButton(text = "用我的", onClick = onResolveOurs)
+                GpTextButton(text = "用对方的", onClick = onResolveTheirs)
+                GpTextButton(text = "已改好", onClick = onMarkResolved)
+            }
         }
     }
 }
 
+/** 合并未完成的提示条：明确告诉用户"还有几个冲突"，并给放弃入口。 */
 @Composable
-private fun ColumnScope.HistoryTab(commits: List<app.gitpocket.core.model.CommitSummary>) {
+private fun MergeBanner(conflicts: Int, onAbort: () -> Unit) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(palette.danger.copy(alpha = 0.12f))
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (conflicts > 0) "合并中：还有 $conflicts 个冲突" else "合并中：冲突已解决，可以提交",
+            style = typography.caption,
+            color = palette.danger,
+            modifier = Modifier.weight(1f),
+        )
+        GpTextButton(text = "放弃合并", onClick = onAbort)
+    }
+}
+
+@Composable
+private fun ColumnScope.HistoryTab(
+    commits: List<app.gitpocket.core.model.CommitSummary>,
+    onUndoLastCommit: () -> Unit,
+) {
     if (commits.isEmpty()) {
         GpEmptyState("还没有提交", "提交第一个改动后，这里会显示历史。")
         return
@@ -277,6 +404,24 @@ private fun ColumnScope.HistoryTab(commits: List<app.gitpocket.core.model.Commit
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        item(key = "undo-last-commit") {
+            val palette = LocalNeumorphicPalette.current
+            val typography = LocalGitPocketTypography.current
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Text(
+                    text = "撤销上次提交",
+                    style = typography.caption,
+                    color = palette.danger,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onUndoLastCommit)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
         items(commits, key = { it.oid.hex }) { commit ->
             val palette = LocalNeumorphicPalette.current
             val typography = LocalGitPocketTypography.current
@@ -340,10 +485,123 @@ private fun ColumnScope.FilesTab(
 }
 
 /**
+ * 分支弹窗：本地分支切换 + 新建分支 + 从远端建本地分支。
+ *
+ * 切换前引擎会检查工作区是否干净，脏工作区直接拒绝并给出原因，
+ * 不做"自动 stash"（手机上看不见 stash，出了事用户找不回来）。
+ */
+@Composable
+private fun BranchDialog(
+    branch: String?,
+    branchState: BranchState,
+    onNameChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onCheckout: (String) -> Unit,
+    onCheckoutRemote: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = palette.base,
+        title = { Text("分支", style = typography.title, color = palette.contentPrimary) },
+        text = {
+            Column {
+                Text(
+                    text = branch?.let { "当前 · $it" } ?: "当前分支未知",
+                    style = typography.caption,
+                    color = palette.contentSecondary,
+                )
+                Spacer(Modifier.height(10.dp))
+
+                LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                    items(branchState.local, key = { "l-${it.name}" }) { item ->
+                        BranchRow(
+                            name = item.name,
+                            selected = item.isCurrent,
+                            enabled = !branchState.busy,
+                            onClick = { onCheckout(item.name) },
+                        )
+                    }
+                    if (branchState.remote.isNotEmpty()) {
+                        item(key = "remote-header") {
+                            Text(
+                                text = "远端分支（点击建本地分支）",
+                                style = typography.caption,
+                                color = palette.contentSecondary,
+                                modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(branchState.remote, key = { "r-${it.name}" }) { item ->
+                            BranchRow(
+                                name = item.name,
+                                selected = false,
+                                enabled = !branchState.busy,
+                                onClick = { onCheckoutRemote(item.name) },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                GpTextField(
+                    value = branchState.newName,
+                    onValueChange = onNameChange,
+                    placeholder = "新分支名，例如 feature/login",
+                )
+                Spacer(Modifier.height(8.dp))
+                GpTextButton(
+                    text = "新建并切换",
+                    enabled = !branchState.busy,
+                    onClick = onCreate,
+                )
+                branchState.error?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, style = typography.caption, color = palette.danger)
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("关闭", style = typography.bodyStrong, color = palette.accent)
+            }
+        },
+    )
+}
+
+@Composable
+private fun BranchRow(name: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) palette.accent.copy(alpha = 0.14f) else Color.Transparent)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            style = if (selected) typography.bodyStrong else typography.body,
+            color = if (selected) palette.accent else palette.contentPrimary,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        if (selected) {
+            Text("当前", style = typography.caption, color = palette.accent)
+        }
+    }
+}
+
+/**
  * 同步弹窗：拉取 / 推送。
  *
- * 刻意只做这两个动作：手机上没有冲突解决 UI，真正的 merge 做不了，
- * 所以 pull 只做快进；推不上去时明确告诉用户"先拉取"。
+ * 拉取 = fetch + 合并：能快进就快进，分叉时走三方合并；
+ * 合并出冲突不静默失败，而是回到「变更」页逐个解决。
  */
 @Composable
 private fun SyncDialog(

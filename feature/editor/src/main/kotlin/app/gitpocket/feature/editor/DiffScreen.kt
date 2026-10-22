@@ -1,8 +1,10 @@
 package app.gitpocket.feature.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,10 +12,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +35,7 @@ import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpScreen
+import app.gitpocket.core.designsystem.GpTextButton
 import app.gitpocket.core.designsystem.GpTopBar
 import app.gitpocket.core.designsystem.LocalGitPocketTypography
 import app.gitpocket.core.designsystem.LocalNeumorphicPalette
@@ -34,6 +43,7 @@ import app.gitpocket.core.model.DiffLine
 import app.gitpocket.core.model.DiffLineKind
 import app.gitpocket.core.model.FileDiff
 import app.gitpocket.core.model.RepoId
+import kotlinx.coroutines.launch
 
 @Composable
 fun DiffScreen(
@@ -76,27 +86,111 @@ private fun DiffBody(diff: FileDiff) {
             description = "已跳过逐行比对：约 +${diff.additions} / −${diff.deletions} 行。",
         )
         diff.hunks.isEmpty() -> GpEmptyState("没有差异", "工作区内容与 HEAD 一致。")
-        else -> LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-        ) {
-            diff.hunks.forEachIndexed { index, hunk ->
-                item(key = "hunk-$index") {
-                    Text(
-                        text = hunk.header,
-                        style = typography.caption.copy(fontFamily = FontFamily.Monospace),
-                        color = palette.accent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(palette.accent.copy(alpha = 0.08f))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
+        else -> {
+            val collapsed = remember { mutableStateMapOf<Int, Boolean>() }
+            val listState = rememberLazyListState()
+            val scope = rememberCoroutineScope()
+            var cursor by remember { mutableIntStateOf(0) }
+
+            // 折叠后每个 hunk 只占 1 个 item，跳转前要按当前折叠状态重算下标
+            fun itemIndexFor(hunkIndex: Int): Int {
+                var index = 0
+                for (i in 0 until hunkIndex) {
+                    index += if (collapsed[i] == true) 1 else 1 + diff.hunks[i].lines.size
                 }
-                items(hunk.lines.size, key = { "$index-$it" }) { lineIndex ->
-                    DiffRow(hunk.lines[lineIndex])
+                return index
+            }
+
+            fun jumpTo(hunkIndex: Int) {
+                val target = hunkIndex.coerceIn(0, diff.hunks.lastIndex)
+                cursor = target
+                scope.launch { listState.animateScrollToItem(itemIndexFor(target)) }
+            }
+
+            Column(Modifier.fillMaxWidth()) {
+                DiffToolbar(
+                    current = cursor + 1,
+                    total = diff.hunks.size,
+                    onPrev = { jumpTo(cursor - 1) },
+                    onNext = { jumpTo(cursor + 1) },
+                    onExpandAll = { collapsed.clear() },
+                )
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
+                    diff.hunks.forEachIndexed { index, hunk ->
+                        item(key = "hunk-$index") {
+                            val isCollapsed = collapsed[index] == true
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (index == cursor) palette.accent.copy(alpha = 0.16f)
+                                        else palette.accent.copy(alpha = 0.08f)
+                                    )
+                                    .clickable { collapsed[index] = !isCollapsed }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                            ) {
+                                Text(
+                                    text = if (isCollapsed) "▸" else "▾",
+                                    style = typography.caption.copy(fontFamily = FontFamily.Monospace),
+                                    color = palette.accent,
+                                )
+                                Text(
+                                    text = hunk.header,
+                                    style = typography.caption.copy(fontFamily = FontFamily.Monospace),
+                                    color = palette.accent,
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                                if (isCollapsed) {
+                                    Text(
+                                        text = "（${hunk.lines.size} 行已折叠）",
+                                        style = typography.caption,
+                                        color = palette.contentSecondary,
+                                        modifier = Modifier.padding(start = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                        if (collapsed[index] != true) {
+                            items(hunk.lines.size, key = { "$index-$it" }) { lineIndex ->
+                                DiffRow(hunk.lines[lineIndex])
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/** diff 工具条：上/下一处变更 + 展开全部。手机屏幕窄，放顶部比放底部更不容易被手势区挡住。 */
+@Composable
+private fun DiffToolbar(
+    current: Int,
+    total: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onExpandAll: () -> Unit,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "第 $current / $total 处变更",
+            style = typography.caption,
+            color = palette.contentSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        GpTextButton(text = "上一处", onClick = onPrev, enabled = current > 1)
+        GpTextButton(text = "下一处", onClick = onNext, enabled = current < total)
+        GpTextButton(text = "展开", onClick = onExpandAll)
     }
 }
 

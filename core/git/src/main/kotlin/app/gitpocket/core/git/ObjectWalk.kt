@@ -60,4 +60,52 @@ object ObjectWalk {
         }
         return false
     }
+
+    /**
+     * 求两个提交的合并基点（best common ancestor）。
+     *
+     * 做法：先给 a 的全部祖先打上深度，再从 b 逐层向外找，取"深度和最小"的公共祖先。
+     * 不追求 git 那套 generation number / 位图优化——手机上的历史规模用不到，
+     * 但允许返回"非最小公共祖先"（与 git 的 criss-cross 处理可能有差异，已记入限制）。
+     */
+    fun mergeBase(db: ObjectDatabase, a: ObjectId, b: ObjectId): ObjectId? {
+        if (a == b) return a
+
+        val depthA = HashMap<ObjectId, Int>()
+        val queueA = ArrayDeque<Pair<ObjectId, Int>>()
+        queueA.addLast(a to 0)
+        while (queueA.isNotEmpty()) {
+            val (oid, depth) = queueA.removeFirst()
+            if (depthA.containsKey(oid)) continue
+            depthA[oid] = depth
+            val commit = runCatching { db.read(oid) }.getOrNull() as? GitCommit ?: continue
+            commit.parents.forEach { queueA.addLast(it to depth + 1) }
+        }
+
+        var best: ObjectId? = null
+        var bestCost = Int.MAX_VALUE
+        val seen = HashSet<ObjectId>()
+        val queueB = ArrayDeque<Pair<ObjectId, Int>>()
+        queueB.addLast(b to 0)
+
+        while (queueB.isNotEmpty()) {
+            val (oid, depth) = queueB.removeFirst()
+            if (depth >= bestCost) break
+            if (!seen.add(oid)) continue
+
+            val depthAValue = depthA[oid]
+            if (depthAValue != null) {
+                val cost = depth + depthAValue
+                if (cost < bestCost) {
+                    bestCost = cost
+                    best = oid
+                }
+                // 同一个提交的祖先必然更远，不必再往下走
+                continue
+            }
+            val commit = runCatching { db.read(oid) }.getOrNull() as? GitCommit ?: continue
+            commit.parents.forEach { queueB.addLast(it to depth + 1) }
+        }
+        return best
+    }
 }

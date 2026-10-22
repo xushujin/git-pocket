@@ -22,9 +22,12 @@ data class EditorUiState(
     val saving: Boolean = false,
     val fontSizeSp: Int = 14,
     val showLineNumbers: Boolean = true,
+    val readOnly: Boolean = false,
+    val tooLarge: Boolean = false,
     val error: String? = null,
     val message: String? = null,
     val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
 ) {
     val lineCount: Int get() = if (content.isEmpty()) 1 else content.count { it == '\n' } + 1
 }
@@ -66,16 +69,28 @@ class EditorViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
             runCatching {
+                // 超过编辑上限的文件只读预览：整份塞进 BasicTextField 会卡死（已实测）
+                val size = repository.fileSize(repoId, path)
+                if (size > MAX_EDIT_BYTES) {
+                    val text = repository.readFile(repoId, path)
+                    return@runCatching Loaded(
+                        content = text?.take(MAX_PREVIEW_CHARS).orEmpty(),
+                        readOnly = true,
+                        tooLarge = true,
+                    )
+                }
                 val disk = repository.readFile(repoId, path)
                 val draft = repository.draft(repoId, path)
                 // 草稿与磁盘不同则优先恢复草稿，并在状态里提示
-                when {
-                    disk == null && draft == null -> null
-                    draft != null && draft != disk -> draft
-                    else -> disk
-                }
-            }.onSuccess { content ->
-                val text = content.orEmpty()
+                Loaded(
+                    content = when {
+                        disk == null && draft == null -> null
+                        draft != null && draft != disk -> draft
+                        else -> disk
+                    },
+                )
+            }.onSuccess { loaded ->
+                val text = loaded.content.orEmpty()
                 undoStack.clear()
                 _state.value = _state.value.copy(
                     loading = false,
@@ -83,7 +98,19 @@ class EditorViewModel(
                     original = text,
                     dirty = false,
                     canUndo = false,
-                    error = if (content == null) "无法以文本方式打开该文件（可能是二进制或不存在）" else null,
+                    canRedo = false,
+                    readOnly = loaded.readOnly,
+                    tooLarge = loaded.tooLarge,
+                    error = when {
+                        loaded.tooLarge -> null
+                        loaded.content == null -> "无法以文本方式打开该文件（可能是二进制或不存在）"
+                        else -> null
+                    },
+                    message = if (loaded.tooLarge) {
+                        "文件超过 ${MAX_EDIT_BYTES / 1024} KB，只能预览前 ${MAX_PREVIEW_CHARS / 1000}K 字符"
+                    } else {
+                        null
+                    },
                 )
             }.onFailure {
                 _state.value = _state.value.copy(loading = false, error = it.message ?: "打开失败")
@@ -91,14 +118,21 @@ class EditorViewModel(
         }
     }
 
+    private data class Loaded(
+        val content: String?,
+        val readOnly: Boolean = false,
+        val tooLarge: Boolean = false,
+    )
+
     fun onContentChange(value: String) {
         val current = _state.value
-        if (value == current.content) return
+        if (value == current.content || current.readOnly) return
         undoStack.record(current.content, value)
         _state.value = current.copy(
             content = value,
             dirty = value != current.original,
             canUndo = undoStack.canUndo,
+            canRedo = undoStack.canRedo,
         )
         if (!autoSaveEnabled) return
         autoSaveJob?.cancel()
@@ -111,12 +145,23 @@ class EditorViewModel(
     /** 回退一步（用户说的"回退"：去掉刚写的那一段）。 */
     fun undo() {
         val previous = undoStack.undo() ?: return
+        applyHistory(previous, "已回退一步")
+    }
+
+    /** 重做一步。 */
+    fun redo() {
+        val next = undoStack.redo() ?: return
+        applyHistory(next, "已重做一步")
+    }
+
+    private fun applyHistory(content: String, message: String) {
         val current = _state.value
         _state.value = current.copy(
-            content = previous,
-            dirty = previous != current.original,
+            content = content,
+            dirty = content != current.original,
             canUndo = undoStack.canUndo,
-            message = "已回退一步",
+            canRedo = undoStack.canRedo,
+            message = message,
         )
     }
 
@@ -151,6 +196,7 @@ class EditorViewModel(
             content = _state.value.original,
             dirty = false,
             canUndo = false,
+            canRedo = false,
             message = "已还原到上次保存的版本",
         )
     }
@@ -159,4 +205,11 @@ class EditorViewModel(
         _state.value = _state.value.copy(message = null)
     }
 
+    companion object {
+        /** 编辑上限：超过这个大小只读预览（BasicTextField 在 MB 级文本下会明显卡顿）。 */
+        const val MAX_EDIT_BYTES = 512 * 1024L
+
+        /** 只读预览最多渲染的字符数，避免一次性布局几十万字符。 */
+        const val MAX_PREVIEW_CHARS = 200_000
+    }
 }

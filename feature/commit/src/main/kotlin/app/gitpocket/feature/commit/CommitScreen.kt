@@ -59,7 +59,12 @@ fun CommitScreen(
     GpScreen {
         GpTopBar(
             title = "提交",
-            subtitle = if (state.changes.isEmpty()) "没有待提交的改动" else "${state.changes.size} 个文件",
+            subtitle = when {
+                state.conflicts.isNotEmpty() -> "还有 ${state.conflicts.size} 个冲突未解决"
+                state.merging -> "合并提交（两个父提交）"
+                state.changes.isEmpty() -> "没有待提交的改动"
+                else -> "${state.changes.size} 个文件"
+            },
             onBack = onBack,
         )
 
@@ -115,6 +120,14 @@ fun CommitScreen(
                         style = typography.caption,
                         color = palette.contentSecondary,
                     )
+                    if (state.conflicts.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "冲突文件：${state.conflicts.joinToString("、")}",
+                            style = typography.caption,
+                            color = palette.danger,
+                        )
+                    }
                     if (state.error != null) {
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -128,7 +141,7 @@ fun CommitScreen(
                         text = if (state.committing) "提交中…" else "提交 ${state.changes.size} 个文件",
                         onClick = viewModel::commit,
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !state.committing && state.message.isNotBlank(),
+                        enabled = !state.committing && state.message.isNotBlank() && state.conflicts.isEmpty(),
                     )
                 }
             }

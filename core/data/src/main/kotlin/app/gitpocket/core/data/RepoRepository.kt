@@ -13,6 +13,8 @@ import app.gitpocket.core.security.KeystoreTokenStore
 import app.gitpocket.core.git.GitIdent
 import app.gitpocket.core.git.GitException
 import app.gitpocket.core.git.GitRepo
+import app.gitpocket.core.git.ConflictStrategy
+import app.gitpocket.core.git.MergeStatus
 import app.gitpocket.core.git.transport.FetchResult
 import app.gitpocket.core.git.transport.GitCredentials
 import app.gitpocket.core.git.transport.GitFetcher
@@ -143,11 +145,13 @@ class RepoRepository(
         repoDao.findById(repoId)!!.toModel()
     }
 
-    /** 拉取结果：区分"远端没变"和"快进成功"，UI 文案不一样。 */
+    /** 拉取结果：区分"远端没变""快进""三方合并""冲突"四种，UI 文案不一样。 */
     data class PullResult(
         val branch: String,
         val upToDate: Boolean,
         val fastForwarded: Boolean,
+        val merged: Boolean,
+        val conflicts: List<String>,
         val newObjects: Int,
     )
 
@@ -168,7 +172,10 @@ class RepoRepository(
         }
     }
 
-    /** pull = fetch + 快进当前分支（不产生 merge commit）。 */
+    /**
+     * pull = fetch + 合并（快进优先，分叉时走三方合并）。
+     * 合并出冲突时不会抛异常，而是返回冲突列表，由 UI 引导解决。
+     */
     suspend fun pull(
         repoId: RepoId,
         onProgress: (SyncProgress) -> Unit = {},
@@ -185,18 +192,47 @@ class RepoRepository(
                     .fetch(entity.remoteUrl, it, onProgress = onProgress)
 
                 val remoteTip = fetched.updatedRefs["refs/remotes/origin/$branch"]
-                    ?: return@use PullResult(branch, upToDate = true, fastForwarded = false, newObjects = 0)
+                    ?: return@use PullResult(branch, upToDate = true, fastForwarded = false, merged = false, conflicts = emptyList(), newObjects = 0)
 
-                val moved = it.fastForward(branch, remoteTip)
+                val outcome = it.merge(remoteTip, "origin/$branch", ident())
                 PullResult(
                     branch = branch,
-                    upToDate = !moved && it.refs.read("refs/heads/$branch") == remoteTip,
-                    fastForwarded = moved,
+                    upToDate = outcome.status == MergeStatus.UP_TO_DATE,
+                    fastForwarded = outcome.status == MergeStatus.FAST_FORWARD,
+                    merged = outcome.status == MergeStatus.MERGED,
+                    conflicts = outcome.conflicts,
                     newObjects = fetched.newObjects,
                 )
             }
         }
     }
+
+    // ---------------------------------------------------------------- 分支
+
+    suspend fun remoteBranches(repoId: RepoId): List<Branch> = read(repoId) { it.remoteBranches() }
+
+    suspend fun checkoutBranch(repoId: RepoId, name: String) =
+        write(repoId) { it.checkoutBranch(name) }
+
+    suspend fun createBranch(repoId: RepoId, name: String, checkout: Boolean) =
+        write(repoId) { it.createBranch(name, checkout) }
+
+    // ---------------------------------------------------------------- 冲突
+
+    suspend fun conflicts(repoId: RepoId): List<String> = read(repoId) { it.conflicts() }
+
+    suspend fun isMerging(repoId: RepoId): Boolean = read(repoId) { it.isMerging }
+
+    suspend fun resolveConflict(repoId: RepoId, path: String, strategy: ConflictStrategy) =
+        write(repoId) { it.resolveConflict(path, strategy) }
+
+    /** 手动改完冲突文件后标记为已解决（写回 index stage 0）。 */
+    suspend fun stageFile(repoId: RepoId, path: String) = write(repoId) { it.stage(path) }
+
+    suspend fun abortMerge(repoId: RepoId) = write(repoId) { it.abortMerge() }
+
+    /** 撤销最近一次提交（soft reset，改动回到暂存区）。 */
+    suspend fun undoLastCommit(repoId: RepoId): String? = write(repoId) { it.undoLastCommit()?.hex }
 
     /** push：推送当前分支；非快进会抛 [app.gitpocket.core.git.GitException.NonFastForward]。 */
     suspend fun push(
@@ -247,6 +283,9 @@ class RepoRepository(
 
     suspend fun readFile(repoId: RepoId, path: String): String? =
         read(repoId) { it.readWorkFile(path) }
+
+    suspend fun fileSize(repoId: RepoId, path: String): Long =
+        read(repoId) { it.workFileSize(path) }
 
     suspend fun diff(repoId: RepoId, path: String): FileDiff =
         read(repoId) { it.diffAgainstHead(path) }

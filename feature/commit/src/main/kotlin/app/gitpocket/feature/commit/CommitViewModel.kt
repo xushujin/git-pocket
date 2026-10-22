@@ -14,6 +14,8 @@ import kotlinx.coroutines.launch
 data class CommitUiState(
     val loading: Boolean = true,
     val changes: List<FileChange> = emptyList(),
+    val conflicts: List<String> = emptyList(),
+    val merging: Boolean = false,
     val message: String = "",
     val authorName: String = "",
     val authorEmail: String = "",
@@ -38,11 +40,17 @@ class CommitViewModel(
     fun load() {
         viewModelScope.launch {
             val (name, email) = settings.authorIdentity()
-            runCatching { repository.status(repoId) }
-                .onSuccess { changes ->
+            runCatching {
+                Triple(repository.status(repoId), repository.conflicts(repoId), repository.isMerging(repoId))
+            }
+                .onSuccess { (changes, conflicts, merging) ->
                     _state.value = _state.value.copy(
                         loading = false,
                         changes = changes,
+                        conflicts = conflicts,
+                        merging = merging,
+                        // 合并提交给个默认信息，省得用户想不出写什么
+                        message = if (merging && _state.value.message.isBlank()) "合并提交" else _state.value.message,
                         authorName = name,
                         authorEmail = email,
                     )
@@ -59,6 +67,10 @@ class CommitViewModel(
 
     fun commit() {
         val current = _state.value
+        if (current.conflicts.isNotEmpty()) {
+            _state.value = current.copy(error = "还有 ${current.conflicts.size} 个冲突未解决，先回仓库详情处理")
+            return
+        }
         if (current.message.isBlank()) {
             _state.value = current.copy(error = "请填写提交信息")
             return

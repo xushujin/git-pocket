@@ -92,6 +92,7 @@ fun EditorScreen(
         GpTopBar(
             title = path.substringAfterLast('/'),
             subtitle = when {
+                state.tooLarge -> "只读 · 文件超过 512 KB"
                 state.saving -> "保存中…"
                 state.dirty -> "未保存的修改"
                 editing -> "编辑中"
@@ -103,15 +104,20 @@ fun EditorScreen(
                 if (editing && state.canUndo) {
                     GpTextButton(text = "回退", onClick = viewModel::undo)
                 }
-                GpTextButton(
-                    text = if (editing) "预览" else "编辑",
-                    onClick = { editing = !editing },
-                )
+                if (editing && state.canRedo) {
+                    GpTextButton(text = "重做", onClick = viewModel::redo)
+                }
+                if (!state.readOnly) {
+                    GpTextButton(
+                        text = if (editing) "预览" else "编辑",
+                        onClick = { editing = !editing },
+                    )
+                }
                 GpIconButton(
                     icon = Icons.Default.Check,
                     contentDescription = "保存",
                     onClick = viewModel::save,
-                    enabled = state.dirty && !state.saving,
+                    enabled = state.dirty && !state.saving && !state.readOnly,
                 )
             },
         )

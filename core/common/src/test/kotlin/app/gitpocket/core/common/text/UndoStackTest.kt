@@ -106,4 +106,48 @@ class UndoStackTest {
         assertFalse(stack.canUndo)
         assertNull(stack.undo())
     }
+
+    @Test
+    fun `回退后可以重做`() {
+        val stack = newStack()
+        val text = type(stack, "", "abc")
+        assertEquals("abc", text)
+
+        assertEquals("", stack.undo())
+        assertTrue(stack.canRedo)
+        assertEquals("abc", stack.redo())
+        assertFalse(stack.canRedo)
+        assertNull(stack.redo())
+    }
+
+    @Test
+    fun `回退后再输入会丢弃重做分支`() {
+        val stack = newStack()
+        val first = type(stack, "", "abc")
+        stack.undo()
+        assertTrue(stack.canRedo)
+
+        // 回退后重新输入：重做分支作废
+        now += 2_000
+        type(stack, "", "xy")
+        assertFalse(stack.canRedo)
+
+        assertEquals("", stack.undo())
+        assertNull(stack.undo())
+        assertEquals(first, "abc")
+    }
+
+    @Test
+    fun `多步回退后能逐级重做`() {
+        val stack = newStack()
+        type(stack, "", "aaa")
+        now += 2_000
+        type(stack, "aaa", "bbb")
+
+        assertEquals("aaa", stack.undo())
+        assertEquals("", stack.undo())
+        assertEquals("aaa", stack.redo())
+        assertEquals("aaabbb", stack.redo())
+        assertNull(stack.redo())
+    }
 }
