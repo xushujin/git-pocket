@@ -140,7 +140,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 ToggleRow(
                     title = "打开仓库时自动 fetch",
-                    description = "第二阶段网络层生效",
+                    description = "打开仓库时自动拉取远端更新（fetch 支持后生效）",
                     checked = state.autoFetch,
                     onCheckedChange = viewModel::setAutoFetch,
                 )
@@ -150,16 +150,16 @@ fun SettingsScreen(
             GpCard {
                 StepperRow(
                     title = "连接超时（秒）",
-                    description = "第二阶段网络层使用",
+                    description = "克隆 / 拉取时的建连超时",
                     value = state.connectTimeout,
-                    onChange = { },
+                    onChange = viewModel::setConnectTimeout,
                     step = 1,
                 )
                 StepperRow(
                     title = "读取超时（秒）",
                     description = "大仓库拉取可适当调大",
                     value = state.readTimeout,
-                    onChange = { },
+                    onChange = viewModel::setReadTimeout,
                     step = 10,
                 )
             }
@@ -168,7 +168,7 @@ fun SettingsScreen(
             GpCard {
                 ToggleRow(
                     title = "生物识别解锁",
-                    description = "第二阶段：校验指纹 / 面容后才解密 token",
+                    description = "打开应用时校验指纹 / 面容 / 锁屏密码",
                     checked = state.biometric,
                     onCheckedChange = viewModel::setBiometric,
                 )

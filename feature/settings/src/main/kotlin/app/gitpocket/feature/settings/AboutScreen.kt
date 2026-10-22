@@ -63,16 +63,16 @@ fun AboutScreen(appVersion: String, onBack: () -> Unit) {
             GpCard {
                 AboutLine("已支持", "本地仓库：浏览、编辑、暂存、提交、查看 diff 与历史")
                 AboutLine("已支持", "Git 对象：loose object、packfile v2（含 ofs/ref delta）、index v2/v3")
-                AboutLine("暂不支持", "克隆 / 拉取 / 推送（网络传输层为第二阶段）")
+                AboutLine("已支持", "HTTPS 克隆：公开仓库与 PAT 私有仓库")
+                AboutLine("暂不支持", "拉取 / 推送（fetch / pull / push）")
                 AboutLine("暂不支持", "SSH、Git LFS、submodule、SHA-256 仓库、force push、rebase")
             }
 
             GpSectionHeader("权限说明")
             GpCard {
-                AboutLine("INTERNET", "克隆、拉取、推送与 PR/CI 查询（第二阶段启用）")
+                AboutLine("INTERNET", "克隆仓库时访问远端")
                 AboutLine("ACCESS_NETWORK_STATE", "判断在线 / 离线，弱网提示")
-                AboutLine("POST_NOTIFICATIONS", "后台同步结果通知（第二阶段，可拒绝）")
-                AboutLine("USE_BIOMETRIC", "解锁本地 token（第二阶段，可选）")
+                AboutLine("USE_BIOMETRIC", "冷启动校验指纹 / 面容 / 锁屏密码（可选，普通权限）")
                 AboutLine("不申请", "存储读写、通讯录、位置、相机、短信等权限")
             }
 

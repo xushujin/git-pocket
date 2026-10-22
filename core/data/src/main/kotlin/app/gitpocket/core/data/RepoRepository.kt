@@ -98,7 +98,13 @@ class RepoRepository(
         val credentials = token.takeIf { it.isNotBlank() }
             ?.let { GitCredentials(username.ifBlank { "x-access-token" }, it) }
 
-        val result = GitCloner(credentials).clone(normalized, directory, onProgress)
+        // 超时取自设置页，默认 10s / 60s
+        val prefs = settings.snapshot.first()
+        val result = GitCloner(
+            credentials = credentials,
+            connectTimeoutMs = prefs.connectTimeout * 1_000,
+            readTimeoutMs = prefs.readTimeout * 1_000,
+        ).clone(normalized, directory, onProgress)
 
         val accountId = "acct-${host}-${username.ifBlank { "anonymous" }}"
         val now = System.currentTimeMillis()

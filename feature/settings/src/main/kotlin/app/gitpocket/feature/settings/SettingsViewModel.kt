@@ -46,6 +46,10 @@ class SettingsViewModel(private val settings: SettingsRepository) : ViewModel() 
 
     fun setAutoFetch(enabled: Boolean) = update(SettingsSpecs.autoFetch, enabled)
 
+    fun setConnectTimeout(seconds: Int) = update(SettingsSpecs.connectTimeout, seconds.coerceIn(5, 60))
+
+    fun setReadTimeout(seconds: Int) = update(SettingsSpecs.readTimeout, seconds.coerceIn(30, 300))
+
     fun setBiometric(enabled: Boolean) = update(SettingsSpecs.biometric, enabled)
 
     private fun <T> update(spec: app.gitpocket.core.datastore.SettingSpec<T>, value: T) {

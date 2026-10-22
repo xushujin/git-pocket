@@ -4,6 +4,8 @@
     <!-- 网络：克隆 / 拉取 / 推送（第二阶段启用） -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 生物识别解锁：普通权限，不弹授权框；实际校验由 BiometricPrompt 完成 -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
         android:name=".GitPocketApplication"
