@@ -8,7 +8,7 @@
 
 ## 能力清单（v1.0.3）
 
-本地 Git 内核、完整界面、HTTPS 克隆均已打通；**fetch / pull / push 尚未实现**。
+本地 Git 内核、完整界面、HTTPS 克隆 / 拉取 / 推送均已打通；**冲突合并尚未实现**（拉取只做快进）。
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
@@ -29,11 +29,12 @@
 | 主题系统（6 套配色，拟态） | ✅ 已实现 | 全局即时生效 |
 | 设置 / 关于页 | ✅ 已实现 | 设置项走注册表 |
 | **clone（HTTPS + PAT）** | ✅ 已实现 | smart HTTP v0，真实 GitHub 仓库验证 |
+| **fetch / pull / push（HTTPS）** | ✅ 已实现 | pull 只做快进；用真实 `git http-backend` 做端到端对拍 |
 
 ## 支持范围
 
-- 已支持：HTTPS 克隆（公开仓库 + PAT 私有仓库）、本地仓库的浏览、编辑、暂存、提交、diff、历史。
-- 未支持：fetch / pull / push、SSH、Git LFS、submodule 递归、SHA-256 仓库、force push、rebase。
+- 已支持：HTTPS 克隆 / 拉取 / 推送（公开仓库 + PAT 私有仓库）、本地仓库的浏览、编辑、暂存、提交、diff、历史。
+- 未支持：冲突合并（拉取只做快进）、SSH、Git LFS、submodule 递归、SHA-256 仓库、force push、rebase。
 
 ## 添加自己的仓库
 

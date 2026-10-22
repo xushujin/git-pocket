@@ -32,8 +32,11 @@ internal class GitHttpClient(
     private val readTimeoutMs: Int = 180_000,
 ) {
 
-    fun advertisement(baseUrl: String): ByteArray {
-        val url = URI("${baseUrl.trimEnd('/')}/info/refs?service=git-upload-pack").toURL()
+    fun advertisement(
+        baseUrl: String,
+        service: String = SERVICE_UPLOAD_PACK,
+    ): ByteArray {
+        val url = URI("${baseUrl.trimEnd('/')}/info/refs?service=$service").toURL()
         val connection = newConnection(url, "GET")
         try {
             connection.setRequestProperty("Accept", "*/*")
@@ -45,11 +48,15 @@ internal class GitHttpClient(
         }
     }
 
-    fun uploadPack(baseUrl: String, body: ByteArray): InputStream {
-        val url = URI("${baseUrl.trimEnd('/')}/git-upload-pack").toURL()
+    fun uploadPack(baseUrl: String, body: ByteArray): InputStream =
+        postRpc(baseUrl, SERVICE_UPLOAD_PACK, body)
+
+    /** receive-pack 用于 push，协议形状与 upload-pack 一致，只是 service 名与 Content-Type 不同。 */
+    fun postRpc(baseUrl: String, service: String, body: ByteArray): InputStream {
+        val url = URI("${baseUrl.trimEnd('/')}/$service").toURL()
         val connection = newConnection(url, "POST")
-        connection.setRequestProperty("Content-Type", "application/x-git-upload-pack-request")
-        connection.setRequestProperty("Accept", "application/x-git-upload-pack-result")
+        connection.setRequestProperty("Content-Type", "application/x-$service-request")
+        connection.setRequestProperty("Accept", "application/x-$service-result")
         connection.doOutput = true
         connection.setFixedLengthStreamingMode(body.size)
         connection.outputStream.use { it.write(body) }
@@ -94,6 +101,9 @@ internal class GitHttpClient(
     }
 
     companion object {
+        const val SERVICE_UPLOAD_PACK = "git-upload-pack"
+        const val SERVICE_RECEIVE_PACK = "git-receive-pack"
+
         fun readAll(input: InputStream): ByteArray {
             val out = ByteArrayOutputStream()
             val buffer = ByteArray(64 * 1024)

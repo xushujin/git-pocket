@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-22
+
+### 新增
+
+- **fetch / pull / push（HTTPS）**：仓库详情页「同步」→ 拉取 / 推送。
+  - 拉取只做快进（fast-forward），分叉时明确提示，不静默合并；
+  - 推送只推当前分支，非快进直接拒绝并提示"先拉取"；
+  - 支持 PAT 认证，认证失败 / 被拒绝都有可读提示与进度。
+- 打开仓库时按设置自动后台 fetch（失败不打扰，可在设置里关）。
+
+### 说明
+
+- 新增 `GitFetcher` / `GitPusher` / `PackWriter` / `ObjectWalk`。
+  push 生成的 pack 不带 delta：体积略大，但省掉基对象管理，出错面小。
+- 端到端测试用真实的 `git http-backend` 起本地 smart HTTP 服务，
+  覆盖首次 fetch、增量 fetch、push、非快进拒绝四种场景。
+
 ## [1.0.3] - 2026-10-22
 
 ### 修复

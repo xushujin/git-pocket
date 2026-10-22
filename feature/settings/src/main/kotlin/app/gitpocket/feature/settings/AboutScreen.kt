@@ -64,7 +64,8 @@ fun AboutScreen(appVersion: String, onBack: () -> Unit) {
                 AboutLine("已支持", "本地仓库：浏览、编辑、暂存、提交、查看 diff 与历史")
                 AboutLine("已支持", "Git 对象：loose object、packfile v2（含 ofs/ref delta）、index v2/v3")
                 AboutLine("已支持", "HTTPS 克隆：公开仓库与 PAT 私有仓库")
-                AboutLine("暂不支持", "拉取 / 推送（fetch / pull / push）")
+                AboutLine("已支持", "HTTPS 拉取 / 推送：PAT 需 repo 写权限")
+                AboutLine("暂不支持", "冲突合并：拉取只做快进，分叉时需先处理")
                 AboutLine("暂不支持", "SSH、Git LFS、submodule、SHA-256 仓库、force push、rebase")
             }
 

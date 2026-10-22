@@ -13,9 +13,14 @@ import app.gitpocket.core.security.KeystoreTokenStore
 import app.gitpocket.core.git.GitIdent
 import app.gitpocket.core.git.GitException
 import app.gitpocket.core.git.GitRepo
+import app.gitpocket.core.git.transport.FetchResult
+import app.gitpocket.core.git.transport.GitCredentials
+import app.gitpocket.core.git.transport.GitFetcher
+import app.gitpocket.core.git.transport.GitPusher
+import app.gitpocket.core.git.transport.PushResult
+import app.gitpocket.core.git.transport.SyncProgress
 import app.gitpocket.core.git.transport.CloneProgress
 import app.gitpocket.core.git.transport.GitCloner
-import app.gitpocket.core.git.transport.GitCredentials
 import app.gitpocket.core.model.Branch
 import app.gitpocket.core.model.CommitSummary
 import app.gitpocket.core.model.FileChange
@@ -136,6 +141,95 @@ class RepoRepository(
             )
         )
         repoDao.findById(repoId)!!.toModel()
+    }
+
+    /** 拉取结果：区分"远端没变"和"快进成功"，UI 文案不一样。 */
+    data class PullResult(
+        val branch: String,
+        val upToDate: Boolean,
+        val fastForwarded: Boolean,
+        val newObjects: Int,
+    )
+
+    /** fetch：只更新远端跟踪引用，不动本地分支与工作区。 */
+    suspend fun fetch(
+        repoId: RepoId,
+        onProgress: (SyncProgress) -> Unit = {},
+    ): FetchResult = withContext(dispatchers.io) {
+        locks.withLock(repoId.value) {
+            val entity = repoDao.findById(repoId.value)
+                ?: throw IllegalStateException("仓库不存在：${repoId.value}")
+            val repo = GitRepo.open(File(entity.localPath))
+                ?: throw IllegalStateException("无法打开仓库：${entity.localPath}")
+            repo.use {
+                GitFetcher(credentialsFor(entity), timeouts().first, timeouts().second)
+                    .fetch(entity.remoteUrl, it, onProgress = onProgress)
+            }
+        }
+    }
+
+    /** pull = fetch + 快进当前分支（不产生 merge commit）。 */
+    suspend fun pull(
+        repoId: RepoId,
+        onProgress: (SyncProgress) -> Unit = {},
+    ): PullResult = withContext(dispatchers.io) {
+        locks.withLock(repoId.value) {
+            val entity = repoDao.findById(repoId.value)
+                ?: throw IllegalStateException("仓库不存在：${repoId.value}")
+            val repo = GitRepo.open(File(entity.localPath))
+                ?: throw IllegalStateException("无法打开仓库：${entity.localPath}")
+            repo.use {
+                val branch = it.refs.currentBranch() ?: entity.defaultBranch ?: "main"
+                val (connectMs, readMs) = timeouts()
+                val fetched = GitFetcher(credentialsFor(entity), connectMs, readMs)
+                    .fetch(entity.remoteUrl, it, onProgress = onProgress)
+
+                val remoteTip = fetched.updatedRefs["refs/remotes/origin/$branch"]
+                    ?: return@use PullResult(branch, upToDate = true, fastForwarded = false, newObjects = 0)
+
+                val moved = it.fastForward(branch, remoteTip)
+                PullResult(
+                    branch = branch,
+                    upToDate = !moved && it.refs.read("refs/heads/$branch") == remoteTip,
+                    fastForwarded = moved,
+                    newObjects = fetched.newObjects,
+                )
+            }
+        }
+    }
+
+    /** push：推送当前分支；非快进会抛 [app.gitpocket.core.git.GitException.NonFastForward]。 */
+    suspend fun push(
+        repoId: RepoId,
+        onProgress: (SyncProgress) -> Unit = {},
+    ): PushResult = withContext(dispatchers.io) {
+        locks.withLock(repoId.value) {
+            val entity = repoDao.findById(repoId.value)
+                ?: throw IllegalStateException("仓库不存在：${repoId.value}")
+            val repo = GitRepo.open(File(entity.localPath))
+                ?: throw IllegalStateException("无法打开仓库：${entity.localPath}")
+            repo.use {
+                val branch = it.refs.currentBranch() ?: entity.defaultBranch ?: "main"
+                val (connectMs, readMs) = timeouts()
+                GitPusher(credentialsFor(entity), connectMs, readMs)
+                    .push(entity.remoteUrl, it, branch, onProgress)
+            }
+        }
+    }
+
+    /** 打开仓库时是否自动 fetch（设置项，默认开）。 */
+    suspend fun autoFetchEnabled(): Boolean = settings.snapshot.first().autoFetch
+
+    private suspend fun credentialsFor(entity: RepoEntity): GitCredentials? {
+        val account = accountDao.findById(entity.accountId) ?: return null
+        if (account.tokenRef.isBlank()) return null
+        val token = tokenStore.load(account.tokenRef) ?: return null
+        return GitCredentials(account.username.ifBlank { "x-access-token" }, token)
+    }
+
+    private suspend fun timeouts(): Pair<Int, Int> {
+        val prefs = settings.snapshot.first()
+        return prefs.connectTimeout * 1_000 to prefs.readTimeout * 1_000
     }
 
     private fun directorySize(directory: File): Long =

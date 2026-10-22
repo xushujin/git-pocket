@@ -203,6 +203,48 @@ class GitRepo private constructor(
         return blob.text()
     }
 
+    /** 读 .git/config 里的 remote url；没有配置时返回 null。 */
+    fun remoteUrl(remote: String = "origin"): String? {
+        val config = File(gitDir, "config")
+        if (!config.isFile) return null
+        var inRemoteSection = false
+        var result: String? = null
+        for (raw in config.readLines()) {
+            val line = raw.trim()
+            if (line.startsWith("[")) {
+                inRemoteSection = line.startsWith("[remote \"$remote\"]")
+            } else if (inRemoteSection && line.startsWith("url") && result == null) {
+                result = line.substringAfter('=').trim().ifBlank { null }
+            }
+        }
+        return result
+    }
+
+    /**
+     * 快进合并：仅当当前分支是 [target] 的祖先时才移动。
+     *
+     * 不做真正的 merge（不产生 merge commit），因为手机端处理冲突代价太高；
+     * 落后且有分叉时明确返回 false，由上层提示"需要先处理分叉"。
+     */
+    fun fastForward(branch: String, target: ObjectId): Boolean {
+        val refName = "refs/heads/$branch"
+        val current = refs.read(refName) ?: return false
+        if (current == target) return false
+        if (!ObjectWalk.isAncestor(objects, current, target)) return false
+
+        val commit = objects.read(target) as? GitCommit ?: return false
+        val targetFiles = flattenTree(commit.tree)
+
+        // 目标树里没有、工作区里还留着的文件要删掉，否则会出现"幽灵文件"
+        GitIndex.read(indexFile).entries.map { it.path }.forEach { path ->
+            if (path !in targetFiles) File(workTree, path).delete()
+        }
+
+        checkoutTree(commit.tree)
+        refs.update(refName, target)
+        return true
+    }
+
     /**
      * 撤销单个文件的工作区修改：
      * - HEAD 里有该文件 -> 用 HEAD 版本覆盖工作区，并同步 index（避免残留 modified）；

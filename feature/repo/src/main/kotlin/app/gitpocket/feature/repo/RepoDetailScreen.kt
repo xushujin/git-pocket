@@ -44,6 +44,7 @@ import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpPrimaryButton
 import app.gitpocket.core.designsystem.GpScreen
+import app.gitpocket.core.designsystem.GpTextButton
 import app.gitpocket.core.designsystem.GpTopBar
 import app.gitpocket.core.designsystem.LocalGitPocketTypography
 import app.gitpocket.core.designsystem.LocalNeumorphicPalette
@@ -87,6 +88,7 @@ fun RepoDetailScreen(
                 if (state.changes.isNotEmpty()) {
                     GpBadge("${state.changes.size} 变更")
                 }
+                GpTextButton(text = "同步", onClick = viewModel::openSync)
             },
         )
 
@@ -112,6 +114,16 @@ fun RepoDetailScreen(
                 DetailTab.FILES -> FilesTab(state.entries, onOpenDirectory, onOpenFile)
             }
         }
+    }
+
+    if (state.sync.visible) {
+        SyncDialog(
+            sync = state.sync,
+            branch = state.branch,
+            onPull = { viewModel.runSync(SyncAction.PULL) },
+            onPush = { viewModel.runSync(SyncAction.PUSH) },
+            onDismiss = viewModel::closeSync,
+        )
     }
 
     discardTarget?.let { path ->
@@ -325,4 +337,73 @@ private fun ColumnScope.FilesTab(
             }
         }
     }
+}
+
+/**
+ * 同步弹窗：拉取 / 推送。
+ *
+ * 刻意只做这两个动作：手机上没有冲突解决 UI，真正的 merge 做不了，
+ * 所以 pull 只做快进；推不上去时明确告诉用户"先拉取"。
+ */
+@Composable
+private fun SyncDialog(
+    sync: SyncState,
+    branch: String?,
+    onPull: () -> Unit,
+    onPush: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!sync.running) onDismiss() },
+        containerColor = palette.base,
+        title = { Text("同步", style = typography.title, color = palette.contentPrimary) },
+        text = {
+            Column {
+                Text(
+                    text = branch?.let { "当前分支 · $it" } ?: "当前分支未知",
+                    style = typography.caption,
+                    color = palette.contentSecondary,
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GpTextButton(
+                        text = "拉取",
+                        enabled = !sync.running,
+                        onClick = onPull,
+                    )
+                    GpTextButton(
+                        text = "推送",
+                        enabled = !sync.running,
+                        onClick = onPush,
+                    )
+                }
+
+                if (sync.running) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "${sync.action?.label.orEmpty()}中 · ${sync.progress}",
+                        style = typography.caption,
+                        color = palette.accent,
+                    )
+                }
+                sync.result?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, style = typography.body, color = palette.contentPrimary)
+                }
+                sync.error?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, style = typography.body, color = palette.danger)
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !sync.running) {
+                Text("关闭", style = typography.bodyStrong, color = palette.accent)
+            }
+        },
+    )
 }

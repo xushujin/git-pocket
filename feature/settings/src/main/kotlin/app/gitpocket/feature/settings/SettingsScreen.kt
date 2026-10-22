@@ -140,7 +140,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 ToggleRow(
                     title = "打开仓库时自动 fetch",
-                    description = "打开仓库时自动拉取远端更新（fetch 支持后生效）",
+                    description = "打开仓库时在后台 fetch，失败不打扰",
                     checked = state.autoFetch,
                     onCheckedChange = viewModel::setAutoFetch,
                 )

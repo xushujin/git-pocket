@@ -26,4 +26,10 @@ sealed class GitException(message: String, cause: Throwable? = null) : Exception
         GitException("网络错误：${cause.message ?: "未知原因"}", cause)
 
     class Io(val path: String, cause: Throwable) : GitException("读写失败：$path", cause)
+
+    /** 远端拒绝（非快进、受保护分支、权限不足等）。 */
+    class PushRejected(val detail: String) : GitException("推送被拒绝：$detail")
+
+    /** 本地分支落后于远端：必须先拉取再推送。 */
+    class NonFastForward(val ref: String) : GitException("远端有本地没有的提交，请先拉取：$ref")
 }
