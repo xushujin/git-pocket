@@ -6,9 +6,9 @@
 
 ---
 
-## 当前实现状态（v0.1 开发中）
+## 能力清单（v1.0.3）
 
-这一版把「本地 Git 内核 + 完整 UI 骨架」打通了，**网络传输层尚未实现**。
+本地 Git 内核、完整界面、HTTPS 克隆均已打通；**fetch / pull / push 尚未实现**。
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
@@ -29,9 +29,6 @@
 | 主题系统（6 套配色，拟态） | ✅ 已实现 | 全局即时生效 |
 | 设置 / 关于页 | ✅ 已实现 | 设置项走注册表 |
 | **clone（HTTPS + PAT）** | ✅ 已实现 | smart HTTP v0，真实 GitHub 仓库验证 |
-| **fetch / pull / push** | ❌ 未实现 | 第二阶段 |
-| **冲突处理 UI** | ❌ 未实现 | 引擎已有 diff3 规划，UI 待接 |
-| PR / CI / Issue | ❌ 未实现 | 第二阶段 |
 
 ## 支持范围
 
@@ -135,17 +132,18 @@ keyPassword=******
 
 ## 发版流程
 
-1. 确认 `main` 上 PR CI 全绿；
+1. 本地跑 `./gradlew test lintDebug`（CI 只在推 tag 时构建，不会自动校验）；
 2. 更新 `CHANGELOG.md`；
 3. 打 tag 并推送：
    ```bash
-   git tag v0.1.0 && git push origin v0.1.0
+   git tag -a v1.0.4 -m "GitPocket v1.0.4" && git push origin v1.0.4
    ```
 4. CI 自动执行：单测 → lint → 签名构建 → `apksigner verify` 校验证书 → 创建 GitHub Release；
 5. 人工检查 Release 资产：`GitPocket-<版本>.apk`、`GitPocket-<版本>.apk.sha256`、`mapping.txt.gz`；
 6. 手动上架（首版不做自动上架，避免误发）。
 
-版本号唯一真源是 tag：`v1.2.3` → `versionName=1.2.3`、`versionCode=10203`。本地无 tag 时为 `0.0.0-dev`。
+`versionName` 由 tag 决定（`v1.2.3` → `1.2.3`），无 tag 时为 `0.1.0-dev.<yyMMdd.HHmm>`；
+`versionCode` 一律取构建时间戳 `yyMMddHH`，保证任何包都能覆盖安装。
 
 ## CI 流程
 
@@ -186,7 +184,7 @@ base64 -i ~/.gitpocket/keys/gitpocket-release.jks | tr -d '\n' | pbcopy
 app/                    单 Activity、导航、依赖装配
 core/model              纯 Kotlin 数据模型
 core/git                ★ 纯 JVM Git 引擎（对象/索引/引用/pack/diff）
-core/common             调度器、格式化、日志脱敏、仓库锁
+core/common             调度器、格式化、语法/Markdown 解析、撤销栈、仓库锁
 core/designsystem       主题、拟态组件、排版
 core/database           Room + 显式迁移 + schema 导出
 core/datastore          设置注册表（DataStore）
@@ -221,8 +219,10 @@ feature/settings        设置 / 关于
 - packfile 读取会把单个对象解压进内存（大对象需流式改造）。
 - 编辑器行号栏在长行自动换行时会与文本错位（逻辑行号正确，视觉对齐会漂）。
 - Markdown 预览不支持嵌套列表、可点击链接、HTML 内嵌。
+- 生物识别只在冷启动 / Activity 重建时校验；后台切回不会重新上锁。
+- 「打开仓库时自动 fetch」开关已存在但 fetch 本身未实现，暂不生效。
 - 迁移测试为仪器测试，需要模拟器/真机执行。
 
 ## 许可证
 
-TBD（发布前确定）。
+暂未声明，默认保留所有权利。若要开源，添加 `LICENSE` 文件后在此注明。
