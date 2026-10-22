@@ -2,6 +2,7 @@ package app.gitpocket.feature.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.gitpocket.core.common.text.UndoStack
 import app.gitpocket.core.data.RepoRepository
 import app.gitpocket.core.datastore.SettingsRepository
 import app.gitpocket.core.model.RepoId
@@ -23,6 +24,7 @@ data class EditorUiState(
     val showLineNumbers: Boolean = true,
     val error: String? = null,
     val message: String? = null,
+    val canUndo: Boolean = false,
 ) {
     val lineCount: Int get() = if (content.isEmpty()) 1 else content.count { it == '\n' } + 1
 }
@@ -39,6 +41,9 @@ class EditorViewModel(
 
     private var autoSaveJob: Job? = null
     private var autoSaveEnabled = false
+
+    /** 撤销栈：合并规则见 [UndoStack]。 */
+    private val undoStack = UndoStack()
 
     init {
         viewModelScope.launch {
@@ -71,11 +76,13 @@ class EditorViewModel(
                 }
             }.onSuccess { content ->
                 val text = content.orEmpty()
+                undoStack.clear()
                 _state.value = _state.value.copy(
                     loading = false,
                     content = text,
                     original = text,
                     dirty = false,
+                    canUndo = false,
                     error = if (content == null) "无法以文本方式打开该文件（可能是二进制或不存在）" else null,
                 )
             }.onFailure {
@@ -85,9 +92,13 @@ class EditorViewModel(
     }
 
     fun onContentChange(value: String) {
-        _state.value = _state.value.copy(
+        val current = _state.value
+        if (value == current.content) return
+        undoStack.record(current.content, value)
+        _state.value = current.copy(
             content = value,
-            dirty = value != _state.value.original,
+            dirty = value != current.original,
+            canUndo = undoStack.canUndo,
         )
         if (!autoSaveEnabled) return
         autoSaveJob?.cancel()
@@ -95,6 +106,18 @@ class EditorViewModel(
             delay(800)
             save()
         }
+    }
+
+    /** 回退一步（用户说的"回退"：去掉刚写的那一段）。 */
+    fun undo() {
+        val previous = undoStack.undo() ?: return
+        val current = _state.value
+        _state.value = current.copy(
+            content = previous,
+            dirty = previous != current.original,
+            canUndo = undoStack.canUndo,
+            message = "已回退一步",
+        )
     }
 
     fun save() {
@@ -123,14 +146,17 @@ class EditorViewModel(
     /** 放弃本次未保存的编辑，内容回退到上次保存（或磁盘）的版本。 */
     fun revert() {
         autoSaveJob?.cancel()
+        undoStack.clear()
         _state.value = _state.value.copy(
             content = _state.value.original,
             dirty = false,
-            message = "已撤销未保存的修改",
+            canUndo = false,
+            message = "已还原到上次保存的版本",
         )
     }
 
     fun clearMessage() {
         _state.value = _state.value.copy(message = null)
     }
+
 }

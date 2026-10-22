@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +36,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.gitpocket.core.common.Formatters
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpBadge
+import app.gitpocket.core.designsystem.FileTypeIcon
+import app.gitpocket.core.designsystem.FileTypeIcon
 import app.gitpocket.core.designsystem.GpCard
 import app.gitpocket.core.designsystem.GpConfirmDialog
 import app.gitpocket.core.designsystem.GpEmptyState
@@ -306,11 +309,8 @@ private fun ColumnScope.FilesTab(
                     .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (entry.isDirectory) "📁" else "📄",
-                    style = typography.body,
-                )
-                Spacer(Modifier.padding(horizontal = 6.dp))
+                FileTypeIcon(isDirectory = entry.isDirectory)
+                Spacer(Modifier.width(10.dp))
                 Text(
                     text = entry.name,
                     style = typography.body,

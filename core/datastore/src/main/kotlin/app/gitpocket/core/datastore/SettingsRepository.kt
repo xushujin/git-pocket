@@ -152,7 +152,7 @@ object SettingsSpecs {
         id = "security.biometric",
         section = SettingsSection.SECURITY,
         title = "生物识别解锁",
-        description = "打开应用时校验指纹 / 面容后才解密 token（第二阶段）",
+        description = "打开应用时校验指纹 / 面容 / 锁屏密码",
         key = booleanPreferencesKey("security_biometric"),
         defaultValue = false,
     )
