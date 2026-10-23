@@ -103,8 +103,7 @@ class GitRepo private constructor(
         val target = refs.read(refName) ?: throw GitException.RefNotFound(refName)
         if (refs.currentBranch() == name) return
 
-        val dirty = status().filter { it.type != ChangeType.UNTRACKED }
-        if (dirty.isNotEmpty()) throw GitException.DirtyWorkTree(dirty.size)
+        requireCleanWorkTree()
 
         val commit = objects.read(target) as? GitCommit ?: throw GitException.RefNotFound(refName)
         checkoutTreeClean(commit.tree)
@@ -121,9 +120,17 @@ class GitRepo private constructor(
         validateBranchName(name)
         val refName = "refs/heads/$name"
         if (refs.read(refName) != null) throw GitException.BranchExists(name)
+        // 要切过去就先确认能切：否则会出现"分支建好了但没切过去"的半成功状态
+        if (checkout) requireCleanWorkTree()
         val head = startPoint ?: refs.head().headOid ?: throw GitException.RefNotFound("HEAD")
         refs.update(refName, head)
         if (checkout) checkoutBranch(name)
+    }
+
+    /** 工作区有未提交改动时抛 [GitException.DirtyWorkTree]（未跟踪文件不算）。 */
+    private fun requireCleanWorkTree() {
+        val dirty = status().filter { it.type != ChangeType.UNTRACKED }
+        if (dirty.isNotEmpty()) throw GitException.DirtyWorkTree(dirty.size)
     }
 
     private fun validateBranchName(name: String) {
@@ -348,8 +355,7 @@ class GitRepo private constructor(
         // 从这里开始一定会改写工作区（快进或三方合并），必须先确认工作区干净。
         // 顺序很重要：以前把这段放在快进判断之后，导致"能快进"时直接 checkoutTree
         // 把未提交的改动覆盖掉，且不报任何错。
-        val dirty = status().filter { it.type != ChangeType.UNTRACKED }
-        if (dirty.isNotEmpty()) throw GitException.DirtyWorkTree(dirty.size)
+        requireCleanWorkTree()
 
         if (headOid == null) {
             checkoutTreeClean(targetCommit.tree)

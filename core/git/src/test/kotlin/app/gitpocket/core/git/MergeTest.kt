@@ -441,4 +441,22 @@ class MergeTest {
         // 真实 git 也要认这个分支指向第一个提交
         assertEquals(first, GitCli.run(dir, "rev-parse", "from-first").trim())
     }
+
+    /** 建分支并切换时，脏工作区应该在写引用之前就被拒绝，不留"建好了但没切"的半成品。 */
+    @Test
+    fun `脏工作区建分支并切换时不留下半成品分支`() {
+        Assume.assumeTrue(GitCli.available)
+        val dir = folder.newFolder("branch-dirty")
+        GitCli.initRepo(dir)
+        File(dir, "a.txt").writeText("v1\n")
+        GitCli.commitAll(dir, "c1")
+        File(dir, "a.txt").writeText("dirty\n")
+
+        GitRepo.open(dir)!!.use { repo ->
+            val error = runCatching { repo.createBranch("newb", checkout = true) }.exceptionOrNull()
+            assertTrue("期望 DirtyWorkTree，实际 $error", error is GitException.DirtyWorkTree)
+            assertNull(repo.refs.read("refs/heads/newb"))
+            assertEquals("main", repo.currentBranch())
+        }
+    }
 }
