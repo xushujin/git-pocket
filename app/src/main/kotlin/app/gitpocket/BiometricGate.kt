@@ -25,7 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,7 +79,10 @@ fun BiometricGate(
     val scope = rememberCoroutineScope()
     val activity = remember(context) { context.findFragmentActivity() }
 
-    var unlocked by rememberSaveable { mutableStateOf(false) }
+    // 注意：这里必须是 remember 而不是 rememberSaveable。
+    // rememberSaveable 会随 Activity 的 saved state 一起恢复，进程被系统回收后重建
+    // 会直接恢复成"已解锁"，门禁等于没开。
+    var unlocked by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf(checkBiometric(context)) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 

@@ -13,6 +13,7 @@ import app.gitpocket.core.model.FileChange
 import app.gitpocket.core.model.FileEntry
 import app.gitpocket.core.model.Repo
 import app.gitpocket.core.model.RepoId
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +63,12 @@ class RepoDetailViewModel(
 
     private val _state = MutableStateFlow(RepoDetailUiState())
     val state: StateFlow<RepoDetailUiState> = _state.asStateFlow()
+
+    /** 正在跑的刷新；新的一次会取消它，避免旧快照覆盖新结果。 */
+    private var refreshJob: Job? = null
+
+    /** 解决冲突是逐文件操作，用一个标记挡住连点。 */
+    private var resolving = false
 
     init {
         refresh()
@@ -118,6 +125,7 @@ class RepoDetailViewModel(
     }
 
     fun createBranch() {
+        if (_state.value.branchState.busy) return
         val name = _state.value.branchState.newName.trim()
         if (name.isEmpty()) {
             _state.value = _state.value.copy(
@@ -146,6 +154,7 @@ class RepoDetailViewModel(
     }
 
     fun checkoutBranch(name: String) {
+        if (_state.value.branchState.busy) return
         if (name == _state.value.branch) {
             closeBranches()
             return
@@ -170,17 +179,21 @@ class RepoDetailViewModel(
         }
     }
 
-    /** 从远端分支建一个同名本地分支并切过去。 */
+    /** 从远端分支建一个同名本地分支并切过去（起点是远端那个提交，不是当前 HEAD）。 */
     fun checkoutRemote(remoteName: String) {
+        if (_state.value.branchState.busy) return
         val local = remoteName.substringAfterLast('/')
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 branchState = _state.value.branchState.copy(busy = true, error = null),
             )
             runCatching {
-                repository.createBranch(repoId, local, checkout = true)
+                repository.createBranchFromRemote(repoId, remoteName, local)
             }.onSuccess {
-                _state.value = _state.value.copy(branchState = BranchState())
+                _state.value = _state.value.copy(
+                    branchState = BranchState(),
+                    message = "已基于 $remoteName 建立本地分支 $local",
+                )
                 refresh()
             }.onFailure {
                 _state.value = _state.value.copy(
@@ -197,6 +210,7 @@ class RepoDetailViewModel(
 
     /** 把某个本地分支合并进当前分支（不切换分支）。 */
     fun mergeBranch(name: String) {
+        if (_state.value.branchState.busy) return
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 branchState = _state.value.branchState.copy(busy = true, error = null),
@@ -281,37 +295,49 @@ class RepoDetailViewModel(
 
     /** 冲突整份选一边。 */
     fun resolve(path: String, strategy: ConflictStrategy) {
+        if (resolving) return
+        resolving = true
         viewModelScope.launch {
-            runCatching { repository.resolveConflict(repoId, path, strategy) }
-                .onSuccess {
-                    _state.value = _state.value.copy(
-                        message = if (repository.conflicts(repoId).isEmpty()) {
-                            "冲突都解决了，可以提交这次合并"
-                        } else {
-                            "已解决 $path"
-                        },
-                    )
-                    refresh(silent = true)
-                }
-                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+            try {
+                runCatching { repository.resolveConflict(repoId, path, strategy) }
+                    .onSuccess {
+                        _state.value = _state.value.copy(
+                            message = if (repository.conflicts(repoId).isEmpty()) {
+                                "冲突都解决了，可以提交这次合并"
+                            } else {
+                                "已解决 $path"
+                            },
+                        )
+                        refresh(silent = true)
+                    }
+                    .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+            } finally {
+                resolving = false
+            }
         }
     }
 
     /** 手动改完后标记为已解决。 */
     fun markResolved(path: String) {
+        if (resolving) return
+        resolving = true
         viewModelScope.launch {
-            runCatching { repository.stageFile(repoId, path) }
-                .onSuccess {
-                    _state.value = _state.value.copy(
-                        message = if (repository.conflicts(repoId).isEmpty()) {
-                            "冲突都解决了，可以提交这次合并"
-                        } else {
-                            "已解决 $path"
-                        },
-                    )
-                    refresh(silent = true)
-                }
-                .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+            try {
+                runCatching { repository.stageFile(repoId, path) }
+                    .onSuccess {
+                        _state.value = _state.value.copy(
+                            message = if (repository.conflicts(repoId).isEmpty()) {
+                                "冲突都解决了，可以提交这次合并"
+                            } else {
+                                "已解决 $path"
+                            },
+                        )
+                        refresh(silent = true)
+                    }
+                    .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
+            } finally {
+                resolving = false
+            }
         }
     }
 
@@ -342,33 +368,33 @@ class RepoDetailViewModel(
 
     /** silent=true 时保留现有内容，只做后台刷新（用于页面 resume）。 */
     fun refresh(silent: Boolean = false) {
-        viewModelScope.launch {
+        // 上一次刷新还没回来就再发一次（init / autoFetch / onResume 会撞在一起）：
+        // 取消旧的，否则慢的那个会用旧快照覆盖新结果，出现"刚暂存的文件又变回未暂存"。
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             if (!silent) _state.value = _state.value.copy(loading = true, error = null)
-            runCatching {
-                val repo = repository.findRepo(repoId)
-                val branch = repository.branches(repoId).firstOrNull { it.isCurrent }?.name
-                val changes = repository.status(repoId)
-                val commits = repository.log(repoId, 50)
-                val entries = repository.entries(repoId, "")
-                val conflicts = repository.conflicts(repoId)
-                val merging = repository.isMerging(repoId)
-                RepoDetailUiState(
-                    loading = false,
-                    repo = repo,
-                    branch = branch,
-                    changes = changes,
-                    commits = commits,
-                    entries = entries,
-                    conflicts = conflicts,
-                    merging = merging,
-                    // 提示条保留到用户点掉为止（否则"已放弃合并"这类反馈会被这次刷新冲掉）
-                    message = _state.value.message,
-                    sync = _state.value.sync,
-                    branchState = _state.value.branchState,
-                )
-            }.onSuccess { _state.value = it }
+            runCatching { repository.detail(repoId) }
+                .onSuccess { snapshot ->
+                    _state.value = RepoDetailUiState(
+                        loading = false,
+                        repo = snapshot.repo,
+                        branch = snapshot.branch,
+                        changes = snapshot.changes,
+                        commits = snapshot.commits,
+                        entries = snapshot.entries,
+                        conflicts = snapshot.conflicts,
+                        merging = snapshot.merging,
+                        // 提示条保留到用户点掉为止（否则"已放弃合并"这类反馈会被这次刷新冲掉）
+                        message = _state.value.message,
+                        sync = _state.value.sync,
+                        branchState = _state.value.branchState,
+                    )
+                }
                 .onFailure {
-                    _state.value = _state.value.copy(loading = false, error = it.message ?: "读取仓库失败")
+                    _state.value = _state.value.copy(
+                        loading = false,
+                        error = it.friendlyMessage(),
+                    )
                 }
         }
     }

@@ -108,11 +108,17 @@ class RepoRepository(
 
         // 超时取自设置页，默认 10s / 60s
         val prefs = settings.snapshot.first()
-        val result = GitCloner(
-            credentials = credentials,
-            connectTimeoutMs = prefs.connectTimeout * 1_000,
-            readTimeoutMs = prefs.readTimeout * 1_000,
-        ).clone(normalized, directory, onProgress)
+        val result = try {
+            GitCloner(
+                credentials = credentials,
+                connectTimeoutMs = prefs.connectTimeout * 1_000,
+                readTimeoutMs = prefs.readTimeout * 1_000,
+            ).clone(normalized, directory, onProgress)
+        } catch (t: Throwable) {
+            // 失败或中途取消：把半成品目录删掉，别在私有目录里留一堆垃圾
+            runCatching { directory.deleteRecursively() }
+            throw t
+        }
 
         val accountId = "acct-${host}-${username.ifBlank { "anonymous" }}"
         val now = System.currentTimeMillis()
@@ -218,6 +224,19 @@ class RepoRepository(
     suspend fun createBranch(repoId: RepoId, name: String, checkout: Boolean) =
         write(repoId) { it.createBranch(name, checkout) }
 
+    /**
+     * 从远端分支建本地同名分支并切过去。
+     *
+     * 起点必须是远端引用的 oid：以前直接调 createBranch（从当前 HEAD 建），
+     * 结果建出来的分支和当前分支指向同一个提交，用户以为切到了远端代码。
+     */
+    suspend fun createBranchFromRemote(repoId: RepoId, remoteRef: String, localName: String) =
+        write(repoId) { git ->
+            val oid = git.refs.read("refs/remotes/$remoteRef")
+                ?: throw GitException.RefNotFound(remoteRef)
+            git.createBranch(localName, checkout = true, startPoint = oid)
+        }
+
     /** 把本地某个分支合并进当前分支（不切换）。 */
     suspend fun mergeBranch(repoId: RepoId, name: String): MergeOutcome = withContext(dispatchers.io) {
         locks.withLock(repoId.value) {
@@ -285,6 +304,46 @@ class RepoRepository(
         directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     suspend fun status(repoId: RepoId): List<FileChange> = read(repoId) { it.status() }
+
+    /**
+     * 详情页的一次性快照：**只打开一次仓库**。
+     *
+     * 以前页面刷新要串行调 7 个接口（每个都 openRepo + 读 index/refs），
+     * 进一次页面就要开 7 次仓库；合并成一个之后首屏明显更快，也少 6 次状态不一致的机会。
+     */
+    data class RepoDetailSnapshot(
+        val repo: Repo?,
+        val branch: String?,
+        val changes: List<FileChange>,
+        val commits: List<CommitSummary>,
+        val entries: List<FileEntry>,
+        val conflicts: List<String>,
+        val merging: Boolean,
+    )
+
+    suspend fun detail(repoId: RepoId, commitLimit: Int = 50): RepoDetailSnapshot =
+        withContext(dispatchers.io) {
+            val entity = repoDao.findById(repoId.value)
+                ?: return@withContext RepoDetailSnapshot(
+                    null, null, emptyList(), emptyList(), emptyList(), emptyList(), false,
+                )
+            val model = entity.toModel()
+            val git = GitRepo.open(File(entity.localPath))
+                ?: return@withContext RepoDetailSnapshot(
+                    model, null, emptyList(), emptyList(), emptyList(), emptyList(), false,
+                )
+            git.use {
+                RepoDetailSnapshot(
+                    repo = model,
+                    branch = it.currentBranch(),
+                    changes = it.status(),
+                    commits = it.log(commitLimit),
+                    entries = it.workTreeEntries(""),
+                    conflicts = it.conflicts(),
+                    merging = it.isMerging,
+                )
+            }
+        }
 
     suspend fun log(repoId: RepoId, limit: Int = 50): List<CommitSummary> =
         read(repoId) { it.log(limit) }

@@ -24,6 +24,18 @@ if [ ! -f keystore.properties ]; then
 fi
 
 echo "== 构建 release =="
+# 版本号来源：显式 GIT_TAG（CI 传 github.ref_name）> 当前提交上的 tag > 构建时间戳。
+# 少了这一步，在打了 tag 的提交上本地构建也会得到 0.1.0-dev.*，与 CI 产物对不上。
+if [ -z "${GIT_TAG:-}" ]; then
+  GIT_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
+  export GIT_TAG
+fi
+if [ -n "${GIT_TAG:-}" ]; then
+  echo "  版本 tag  : $GIT_TAG"
+else
+  echo "  版本 tag  : 无（使用构建时间戳）"
+fi
+
 ./gradlew :app:assembleRelease --console=plain "$@"
 
 APK=$(ls app/build/outputs/apk/release/GitPocket-*.apk 2>/dev/null | head -1)

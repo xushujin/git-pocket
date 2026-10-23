@@ -33,6 +33,10 @@ jobs:
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
 
+      - name: Unit tests + lint
+        # 发布前先过一遍：tag 一旦推上去就会直接产出 Release，不能带着红灯出包
+        run: ./gradlew test lintDebug --stacktrace
+
       - name: Build signed release
         env:
           GITPOCKET_KEYSTORE_FILE: ${{ runner.temp }}/release.jks

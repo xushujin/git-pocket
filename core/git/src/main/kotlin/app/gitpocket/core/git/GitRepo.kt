@@ -111,12 +111,17 @@ class GitRepo private constructor(
         refs.updateHead(refName)
     }
 
-    /** 在当前 HEAD 上新建分支；[checkout] 为 true 时建完直接切过去。 */
-    fun createBranch(name: String, checkout: Boolean) {
+    /**
+     * 在当前 HEAD 上新建分支；[checkout] 为 true 时建完直接切过去。
+     *
+     * [startPoint] 为空表示以当前 HEAD 为起点；从远端分支建本地分支时必须显式传
+     * 远端引用的 oid —— 否则建出来的分支指向的是"我现在所在的位置"，而不是远端那个提交。
+     */
+    fun createBranch(name: String, checkout: Boolean, startPoint: ObjectId? = null) {
         validateBranchName(name)
         val refName = "refs/heads/$name"
         if (refs.read(refName) != null) throw GitException.BranchExists(name)
-        val head = refs.head().headOid ?: throw GitException.RefNotFound("HEAD")
+        val head = startPoint ?: refs.head().headOid ?: throw GitException.RefNotFound("HEAD")
         refs.update(refName, head)
         if (checkout) checkoutBranch(name)
     }
@@ -332,23 +337,30 @@ class GitRepo private constructor(
         val targetCommit = objects.read(target) as? GitCommit
             ?: throw GitException.RefNotFound(label)
 
+        // 不需要动工作区的情况先返回，避免为了"已经是最新"还去扫一遍工作区
+        if (headOid != null) {
+            if (headOid == target) return MergeOutcome(MergeStatus.UP_TO_DATE, emptyList(), headOid)
+            if (ObjectWalk.isAncestor(objects, target, headOid)) {
+                return MergeOutcome(MergeStatus.UP_TO_DATE, emptyList(), headOid)
+            }
+        }
+
+        // 从这里开始一定会改写工作区（快进或三方合并），必须先确认工作区干净。
+        // 顺序很重要：以前把这段放在快进判断之后，导致"能快进"时直接 checkoutTree
+        // 把未提交的改动覆盖掉，且不报任何错。
+        val dirty = status().filter { it.type != ChangeType.UNTRACKED }
+        if (dirty.isNotEmpty()) throw GitException.DirtyWorkTree(dirty.size)
+
         if (headOid == null) {
             checkoutTreeClean(targetCommit.tree)
             moveHead(head, target)
             return MergeOutcome(MergeStatus.FAST_FORWARD, emptyList(), target)
         }
-        if (headOid == target) return MergeOutcome(MergeStatus.UP_TO_DATE, emptyList(), headOid)
         if (ObjectWalk.isAncestor(objects, headOid, target)) {
             checkoutTreeClean(targetCommit.tree)
             moveHead(head, target)
             return MergeOutcome(MergeStatus.FAST_FORWARD, emptyList(), target)
         }
-        if (ObjectWalk.isAncestor(objects, target, headOid)) {
-            return MergeOutcome(MergeStatus.UP_TO_DATE, emptyList(), headOid)
-        }
-
-        val dirty = status().filter { it.type != ChangeType.UNTRACKED }
-        if (dirty.isNotEmpty()) throw GitException.DirtyWorkTree(dirty.size)
 
         val baseOid = ObjectWalk.mergeBase(objects, headOid, target)
             ?: throw GitException.UnsupportedFeature("两个分支没有共同祖先（unrelated histories）")

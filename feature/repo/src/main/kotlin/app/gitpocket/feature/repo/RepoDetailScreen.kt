@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,7 +39,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.gitpocket.core.common.Formatters
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpBadge
-import app.gitpocket.core.designsystem.FileTypeIcon
 import app.gitpocket.core.designsystem.FileTypeIcon
 import app.gitpocket.core.designsystem.GpCard
 import app.gitpocket.core.designsystem.GpConfirmDialog
@@ -230,7 +231,8 @@ private fun GpTabRow(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> 
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (selected) palette.accent.copy(alpha = 0.16f) else Color.Transparent)
-                    .clickable { onSelect(index) }
+                    // selectable 而不是 clickable：读屏才会播报"已选中"
+                    .selectable(selected = selected, role = Role.Tab) { onSelect(index) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -536,8 +538,10 @@ private fun BranchDialog(
             )
             Spacer(Modifier.height(10.dp))
 
-            LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
-                items(branchState.local, key = { "l-${it.name}" }) { item ->
+            // 用普通 Column 而不是 LazyColumn：外层 GpDialog 已经是滚动容器，
+            // 同向嵌套滚动会互相抢手势（滑列表滑不动、滑外面列表不动）。
+            Column {
+                branchState.local.forEach { item ->
                     BranchRow(
                         name = item.name,
                         selected = item.isCurrent,
@@ -547,15 +551,13 @@ private fun BranchDialog(
                     )
                 }
                 if (branchState.remote.isNotEmpty()) {
-                    item(key = "remote-header") {
-                        Text(
-                            text = "远端分支（点击建本地分支）",
-                            style = typography.caption,
-                            color = palette.contentSecondary,
-                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                        )
-                    }
-                    items(branchState.remote, key = { "r-${it.name}" }) { item ->
+                    Text(
+                        text = "远端分支（点击建本地分支）",
+                        style = typography.caption,
+                        color = palette.contentSecondary,
+                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                    )
+                    branchState.remote.forEach { item ->
                         BranchRow(
                             name = item.name,
                             selected = false,

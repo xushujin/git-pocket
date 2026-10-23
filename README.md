@@ -6,7 +6,7 @@
 
 ---
 
-## 能力清单（v1.1.3）
+## 能力清单（v1.2.0）
 
 本地 Git 内核、完整界面、HTTPS 克隆 / 拉取 / 推送、分支切换、三方合并与冲突解决均已打通。
 
@@ -18,7 +18,7 @@
 | commit / tree 序列化 | ✅ 已实现 | `git fsck --strict` 通过 |
 | 工作区状态（含 racy-clean 处理） | ✅ 已实现 | 与 `git status --porcelain` 一致 |
 | 行级 diff（Myers） | ✅ 已实现 | 大文件降级；支持折叠与上/下一处跳转 |
-| 仓库浏览 / 文件树 / 编辑器 / 草稿 | ✅ 已实现 | 默认预览，点「编辑」才可写；>512KB 只读 |
+| 仓库浏览 / 文件树 / 编辑器 / 草稿 | ✅ 已实现 | 默认预览，点「编辑」才可写；>512KB 只读；保存后自动留底（草稿仅记录已保存内容） |
 | **语法高亮**（Kotlin/Java/JS/TS/JSON/XML/Python/Shell/Markdown） | ✅ 已实现 | 自研词法器，无第三方库 |
 | **Markdown 预览**（标题/列表/引用/表格/代码块/行内样式） | ✅ 已实现 | 原生 Compose 渲染，非 WebView |
 | **手动保存 + 还原** | ✅ 已实现 | 默认不自动保存；离开前确认，可还原到上次保存 |
@@ -36,15 +36,18 @@
 ## 支持范围
 
 - 已支持：HTTPS 克隆 / 拉取 / 推送（公开仓库 + PAT 私有仓库）、本地仓库的浏览、编辑、暂存、提交、diff、历史、
-  分支切换与新建、分叉后的三方合并与冲突解决。
-- 未支持：SSH、Git LFS、submodule 递归、SHA-256 仓库、force push、rebase、rename detection（改名 = 删除 + 新增）。
+  分支切换与新建、从远端分支建本地分支、分叉后的三方合并与冲突解决。
+- 未支持：SSH、Git LFS、submodule（只登记 gitlink，不 init / update）、SHA-256 仓库、force push、rebase、
+  rename detection（改名 = 删除 + 新增）。
+- 拉取/合并前要求工作区干净：有未提交改动时**直接拒绝**，不会覆盖你的修改（未跟踪文件不拦）。
 
 ## 分支与合并
 
-- 仓库详情页右上角 **「分支」**：列出本地分支与远端跟踪分支，点本地分支即切换，点远端分支会建一个同名本地分支并切过去；
-  输入名字可新建分支。切换前要求工作区干净（未跟踪文件不拦），不做自动 stash。
+- 仓库详情页右上角 **「分支」**：列出本地分支与远端跟踪分支，点本地分支即切换，点远端分支会**以远端那个提交为起点**
+  建同名本地分支并切过去；输入名字可新建分支。切换前要求工作区干净（未跟踪文件不拦），不做自动 stash。
 - 分支列表里每个非当前分支右侧有 **「合并」**：把该分支合进当前分支，不用先切过去。
 - **「同步」→ 拉取** = fetch + 合并：能快进就快进，分叉时自动三方合并，并产生一个合并提交。
+  工作区有未提交改动时会直接拒绝（不会覆盖），先提交或撤销再拉。
 - 合并出冲突时不静默失败：变更列表里冲突文件标红「!」，可一键「用我的 / 用对方的」，也可以进编辑器手动改完点「已改好」；
   全部解决后变更页会变成「合并已就绪」，点「提交这次合并」即可（此时产生两个父提交的 merge commit）。
   顶部提示条可「放弃合并」，工作区回到合并前。
@@ -147,28 +150,28 @@ keyPassword=******
 
 ## 发版流程
 
-1. 本地跑 `./gradlew test lintDebug`（CI 只在推 tag 时构建，不会自动校验）；
+1. 本地跑 `./gradlew test lintDebug`；
 2. 更新 `CHANGELOG.md`；
 3. 打 tag 并推送：
    ```bash
-   git tag -a v1.1.0 -m "GitPocket v1.1.0" && git push origin v1.1.0
+   git tag -a v1.2.0 -m "GitPocket v1.2.0" && git push origin v1.2.0
    ```
-4. CI 自动执行：单测 → lint → 签名构建 → `apksigner verify` 校验证书 → 创建 GitHub Release；
+4. CI 自动执行：单测 + lint → 签名构建 → `apksigner verify` 校验证书 → 创建 GitHub Release；
 5. 人工检查 Release 资产：`GitPocket-<版本>.apk`、`GitPocket-<版本>.apk.sha256`、`mapping.txt.gz`；
 6. 手动上架（首版不做自动上架，避免误发）。
 
-`versionName` 由 tag 决定（`v1.2.3` → `1.2.3`），无 tag 时为 `0.1.0-dev.<yyMMdd.HHmm>`；
+`versionName` 由 tag 决定（`v1.2.3` → `1.2.3`）：`scripts/build-release.sh` 在没显式传 `GIT_TAG` 时会取
+当前提交上的 tag（`git describe --tags --exact-match`），都没有才回落到 `0.1.0-dev.<yyMMdd.HHmm>`；
 `versionCode` 一律取构建时间戳 `yyMMddHH`，保证任何包都能覆盖安装。
 
 ## CI 流程
 
 | 工作流 | 触发 | 内容 |
 |---|---|---|
-| `.github/workflows/release.yml` | **推送 tag `v*.*.*`** | 签名构建、签名校验、自动创建 Release |
-| `.github/workflows/verify.yml` | 手动（Actions → Run workflow） | 单元测试、lint（不产出 APK） |
+| `.github/workflows/release.yml` | **推送 tag `v*.*.*`** | 单测 + lint、签名构建、签名校验、自动创建 Release |
+| `.github/workflows/verify.yml` | 推 `main` / `develop`、PR、手动 | 单元测试、lint（不产出 APK） |
 
-**只有推送 tag 才会自动触发任何工作流**。日常提交、PR 都不会跑 CI，也不会产出安装包；
-需要检查时去 Actions 页面手动点 `verify` 的 Run workflow。
+出包仍然**只由 tag 触发**，日常提交不会产出安装包。
 
 ## CI 配置（GitHub Actions Secrets）
 
@@ -232,14 +235,17 @@ feature/settings        设置 / 关于
 ## 已知限制
 
 - packfile 读取会把单个对象解压进内存（大对象需流式改造）。
+- 克隆 / 拉取下来的对象一律按 loose object 落盘，没有 idx/pack 落盘与 `gc`：
+  大仓库的 `.git/objects` 文件数会偏多、占空间略大。
 - 合并只做行级 diff3：不做 rename detection，重命名会被当成删除 + 新增；
   两侧在同一位置插入不同内容时会报冲突（宁多报不漏内容）。
 - 二进制 / 符号链接 / 子模块的冲突只能整份选一边，不能逐行合并。
-- 切换分支要求工作区干净，没有自动 stash。
+- 切换分支、拉取、合并都要求工作区干净，没有自动 stash。
 - 编辑器行号栏在长行自动换行时会与文本错位（逻辑行号正确，视觉对齐会漂）。
 - 超过 512 KB 的文件只读预览（截断到 20 万字符），避免 `BasicTextField` 卡顿。
+- 超过 5000 行的文件不显示逐行 diff，只给"新增/删除行数"的统计。
 - Markdown 预览不支持嵌套列表、可点击链接、HTML 内嵌。
-- 生物识别只在冷启动 / Activity 重建时校验；后台切回不会重新上锁。
+- 生物识别在冷启动与界面重建时校验；从后台切回不会重新上锁（避免每次切应用都验一次）。
 - 迁移测试为仪器测试，需要模拟器/真机执行（当前仓库未包含 androidTest 用例）。
 
 ## 许可证

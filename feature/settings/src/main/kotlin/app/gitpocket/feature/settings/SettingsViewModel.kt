@@ -38,8 +38,6 @@ class SettingsViewModel(private val settings: SettingsRepository) : ViewModel() 
 
     fun setShowLineNumbers(enabled: Boolean) = update(SettingsSpecs.showLineNumbers, enabled)
 
-    fun setTabWidth(width: Int) = update(SettingsSpecs.tabWidth, width.coerceIn(2, 8))
-
     fun setAuthorName(value: String) = update(SettingsSpecs.authorName, value)
 
     fun setAuthorEmail(value: String) = update(SettingsSpecs.authorEmail, value)

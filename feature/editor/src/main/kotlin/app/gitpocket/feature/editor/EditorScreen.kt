@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ import app.gitpocket.core.designsystem.rememberHighlightedCode
 import app.gitpocket.core.designsystem.rememberSyntaxTransformation
 import app.gitpocket.core.model.RepoId
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditorScreen(
@@ -73,6 +75,7 @@ fun EditorScreen(
     var editing by remember { mutableStateOf(false) }
     var exitDialog by remember { mutableStateOf(false) }
     var revertDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun attemptLeave() {
         if (state.dirty) exitDialog = true else onBack()
@@ -82,10 +85,11 @@ fun EditorScreen(
     BackHandler(enabled = state.dirty) { exitDialog = true }
 
     LaunchedEffect(state.message) {
-        if (state.message != null) {
-            delay(2000)
-            viewModel.clearMessage()
-        }
+        val message = state.message ?: return@LaunchedEffect
+        // 失败信息留在页面上，别 2 秒就消失（用户还没读完就没了）
+        if (message.startsWith("保存失败")) return@LaunchedEffect
+        delay(2000)
+        viewModel.clearMessage()
     }
 
     GpScreen {
@@ -159,8 +163,10 @@ fun EditorScreen(
             dismissText = "放弃修改",
             onConfirm = {
                 exitDialog = false
-                viewModel.save()
-                onBack()
+                // 必须等写盘完成再返回：先 onBack 会取消 viewModelScope，保存根本没跑
+                scope.launch {
+                    if (viewModel.saveNow()) onBack()
+                }
             },
             onDismiss = {
                 exitDialog = false

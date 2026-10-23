@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -112,13 +114,6 @@ fun SettingsScreen(
                     description = null,
                     checked = state.showLineNumbers,
                     onCheckedChange = viewModel::setShowLineNumbers,
-                )
-                StepperRow(
-                    title = "制表符宽度",
-                    description = null,
-                    value = state.tabWidth,
-                    onChange = viewModel::setTabWidth,
-                    step = 2,
                 )
             }
 
@@ -224,7 +219,8 @@ private fun ChoiceRow(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (active) palette.accent.copy(alpha = 0.18f) else Color.Transparent)
-                    .clickable { onSelect(id) }
+                    // selectable：读屏会播报"已选中 / 未选中"
+                    .selectable(selected = active, role = Role.RadioButton) { onSelect(id) }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Text(

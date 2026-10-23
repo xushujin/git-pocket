@@ -1,5 +1,6 @@
 package app.gitpocket.core.git
 
+import app.gitpocket.core.model.ObjectId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -390,5 +391,54 @@ class MergeTest {
             GitCli.initRepo(orphan)
             assertNull(GitRepo.open(orphan)!!.use { r -> r.refs.head().headOid })
         }
+    }
+
+    // ---------------------------------------------------------------- 回归
+
+    /**
+     * 回归：以前脏工作区检查放在"能否快进"之后，导致 pull 在可快进时
+     * 直接 checkoutTree 把未提交的改动覆盖掉，且不报错。
+     */
+    @Test
+    fun `工作区有未提交改动时拒绝快进合并`() {
+        Assume.assumeTrue(GitCli.available)
+        val dir = folder.newFolder("dirty-ff")
+        GitCli.initRepo(dir)
+        File(dir, "a.txt").writeText("v1\n")
+        GitCli.commitAll(dir, "c1")
+
+        GitCli.run(dir, "checkout", "-q", "-b", "ahead")
+        File(dir, "a.txt").writeText("v2-remote\n")
+        GitCli.commitAll(dir, "c2")
+        GitCli.run(dir, "checkout", "-q", "main")
+
+        File(dir, "a.txt").writeText("LOCAL-DIRTY\n")
+
+        GitRepo.open(dir)!!.use { repo ->
+            val target = repo.refs.read("refs/heads/ahead")!!
+            val error = runCatching { repo.merge(target, "ahead", ident) }.exceptionOrNull()
+            assertTrue("期望 DirtyWorkTree，实际 $error", error is GitException.DirtyWorkTree)
+            // 关键：文件内容不能被改写
+            assertEquals("LOCAL-DIRTY\n", File(dir, "a.txt").readText())
+        }
+    }
+
+    @Test
+    fun `从指定提交建分支而不是当前 HEAD`() {
+        Assume.assumeTrue(GitCli.available)
+        val dir = folder.newFolder("branch-start")
+        GitCli.initRepo(dir)
+        File(dir, "a.txt").writeText("v1\n")
+        GitCli.commitAll(dir, "c1")
+        val first = GitCli.run(dir, "rev-parse", "HEAD").trim()
+        File(dir, "a.txt").writeText("v2\n")
+        GitCli.commitAll(dir, "c2")
+
+        GitRepo.open(dir)!!.use { repo ->
+            repo.createBranch("from-first", checkout = false, startPoint = ObjectId(first))
+            assertEquals(first, repo.refs.read("refs/heads/from-first")?.hex)
+        }
+        // 真实 git 也要认这个分支指向第一个提交
+        assertEquals(first, GitCli.run(dir, "rev-parse", "from-first").trim())
     }
 }

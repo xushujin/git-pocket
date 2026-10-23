@@ -70,6 +70,13 @@ fun CommitScreen(
 
         when {
             state.loading -> GpLoading()
+            // 读取失败要优先于空态：否则 changes 为空会命中"工作区干净"，把失败伪装成正常
+            state.error != null && state.changes.isEmpty() && !state.merging -> GpEmptyState(
+                title = "读取失败",
+                description = state.error.orEmpty(),
+                actionLabel = "重试",
+                onAction = viewModel::load,
+            )
             // 合并提交即使没有任何文件差异也要能提交（树可能等于当前分支）
             state.changes.isEmpty() && !state.merging && state.committedOid == null -> GpEmptyState(
                 title = "工作区干净",

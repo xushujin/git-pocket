@@ -67,15 +67,15 @@ fun AboutScreen(appVersion: String, onBack: () -> Unit) {
                 AboutLine("已支持", "HTTPS 拉取 / 推送：PAT 需 repo 写权限")
                 AboutLine("已支持", "分支：查看、切换、新建、直接合并进当前分支；工作区脏时拒绝切换")
                 AboutLine("已支持", "三方合并：拉取自动合并，冲突可选我的 / 对方的 / 手动改")
-                AboutLine("暂不支持", "SSH、Git LFS、submodule、SHA-256 仓库、force push、rebase")
+                AboutLine("暂不支持", "SSH、Git LFS、submodule（只登记 gitlink，不 init/update）、SHA-256 仓库、force push、rebase")
                 AboutLine("暂不支持", "重命名检测：改名会被当成删除 + 新增")
             }
 
             GpSectionHeader("权限说明")
             GpCard {
-                AboutLine("INTERNET", "克隆仓库时访问远端")
-                AboutLine("ACCESS_NETWORK_STATE", "判断在线 / 离线，弱网提示")
-                AboutLine("USE_BIOMETRIC", "冷启动校验指纹 / 面容 / 锁屏密码（可选，普通权限）")
+                AboutLine("INTERNET", "克隆 / 拉取 / 推送时访问远端")
+                AboutLine("ACCESS_NETWORK_STATE", "随 INTERNET 一并声明，用于系统网络状态判断")
+                AboutLine("USE_BIOMETRIC", "启动与界面重建时校验指纹 / 面容 / 锁屏密码（可选，普通权限）")
                 AboutLine("不申请", "存储读写、通讯录、位置、相机、短信等权限")
             }
 

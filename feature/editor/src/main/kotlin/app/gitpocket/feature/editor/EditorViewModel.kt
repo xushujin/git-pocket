@@ -166,26 +166,44 @@ class EditorViewModel(
     }
 
     fun save() {
+        viewModelScope.launch { saveNow() }
+    }
+
+    /**
+     * 保存并等结果。**退出页面前必须用这个**：
+     * `save()` 只是 launch 一个协程，紧接着 pop 页面会让 viewModelScope 被取消，
+     * 写盘还没开始就死了 —— "保存并退出"会静默丢改动。
+     *
+     * 返回 true 表示内容已经在磁盘上（包括"本来就没有改动"）。
+     */
+    suspend fun saveNow(): Boolean {
         val current = _state.value
-        if (!current.dirty || current.loading) return
-        viewModelScope.launch {
-            _state.value = current.copy(saving = true, message = null)
-            runCatching { repository.saveFile(repoId, path, current.content) }
-                .onSuccess {
-                    _state.value = _state.value.copy(
+        if (current.loading) return false
+        if (!current.dirty || current.readOnly) return true
+
+        _state.value = current.copy(saving = true, message = null)
+        return runCatching { repository.saveFile(repoId, path, current.content) }
+            .fold(
+                onSuccess = {
+                    // 保存期间用户可能又输入了：这时不能把 dirty 清掉，否则新内容会被当成已保存
+                    val latest = _state.value
+                    val stillDirty = latest.content != current.content
+                    _state.value = latest.copy(
                         saving = false,
                         original = current.content,
-                        dirty = false,
-                        message = "已保存",
+                        dirty = stillDirty,
+                        message = if (stillDirty) "已保存，但之后又有新改动" else "已保存",
                     )
-                }
-                .onFailure {
+                    true
+                },
+                onFailure = {
                     _state.value = _state.value.copy(
                         saving = false,
-                        message = "保存失败：${it.message}",
+                        message = "保存失败：${it.message ?: "未知错误"}",
                     )
-                }
-        }
+                    false
+                },
+            )
     }
 
     /** 放弃本次未保存的编辑，内容回退到上次保存（或磁盘）的版本。 */

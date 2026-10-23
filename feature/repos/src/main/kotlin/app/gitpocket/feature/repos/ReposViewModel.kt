@@ -7,6 +7,7 @@ import app.gitpocket.core.model.Repo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 data class ReposUiState(
@@ -24,9 +25,15 @@ class ReposViewModel(private val repository: RepoRepository) : ViewModel() {
         // 新版本不再预置示例仓库；这里只清理旧版本留下的 local-demo
         viewModelScope.launch { runCatching { repository.removeLegacyDemo() } }
         viewModelScope.launch {
-            repository.observeRepos().collect { repos ->
-                _state.value = ReposUiState(loading = false, repos = repos)
-            }
+            repository.observeRepos()
+                // 数据库打不开（磁盘满 / 迁移失败）时不能让页面永远停在"正在准备"，
+                // 否则 error 分支是死代码，用户只看到一个转圈
+                .catch { error ->
+                    _state.value = _state.value.copy(loading = false, error = error.userMessage())
+                }
+                .collect { repos ->
+                    _state.value = ReposUiState(loading = false, repos = repos)
+                }
         }
     }
 

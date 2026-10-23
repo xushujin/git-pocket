@@ -11,14 +11,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.gitpocket.core.data.LocalRepoRepository
 import app.gitpocket.core.designsystem.GpCard
+import app.gitpocket.core.designsystem.GpConfirmDialog
 import app.gitpocket.core.designsystem.GpPrimaryButton
 import app.gitpocket.core.designsystem.GpScreen
 import app.gitpocket.core.designsystem.GpTextField
@@ -39,6 +44,10 @@ fun CloneScreen(
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
 
+    // 克隆中返回会中断传输（半成品目录由仓库层清理），先确认一下
+    var confirmLeave by remember { mutableStateOf(false) }
+    BackHandler(enabled = state.running) { confirmLeave = true }
+
     LaunchedEffect(state.clonedRepoId) {
         state.clonedRepoId?.let(onCloned)
     }
@@ -47,7 +56,7 @@ fun CloneScreen(
         GpTopBar(
             title = "克隆仓库",
             subtitle = "HTTPS · GitHub / GitLab / Gitea",
-            onBack = onBack,
+            onBack = { if (state.running) confirmLeave = true else onBack() },
         )
 
         Column(
@@ -125,5 +134,20 @@ fun CloneScreen(
                 color = palette.contentSecondary,
             )
         }
+    }
+
+    if (confirmLeave) {
+        GpConfirmDialog(
+            title = "克隆还没完成",
+            message = "现在离开会中断传输，已下载的内容会被丢弃，下次需要重新开始。",
+            confirmText = "中断并返回",
+            dismissText = "继续等待",
+            onConfirm = {
+                confirmLeave = false
+                onBack()
+            },
+            onDismiss = { confirmLeave = false },
+            onCancel = { confirmLeave = false },
+        )
     }
 }

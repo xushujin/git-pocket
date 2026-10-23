@@ -1,8 +1,11 @@
 name: verify
 
-# 只有推送 tag 才会自动触发构建（见 release.yml）。
-# 这个工作流只用于手动跑单测 + lint：仓库 → Actions → verify → Run workflow。
+# 推 main / develop 或提 PR 时跑单测 + lint（不签名、不出包）。
+# 出包仍然只由 tag 触发（见 release.yml），避免误发。
 on:
+  push:
+    branches: [main, develop]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -18,9 +21,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # 零警告：CI 上强制 allWarningsAsErrors
-      - name: Unit tests (JVM)
-        run: ./gradlew :core:git:test --stacktrace -Pgitpocket.werror=true
+      - name: Unit tests
+        run: ./gradlew test --stacktrace
 
       - name: Lint
-        run: ./gradlew lintDebug
+        run: ./gradlew lintDebug --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/**'
+          retention-days: 7

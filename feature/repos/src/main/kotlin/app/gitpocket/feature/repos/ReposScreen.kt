@@ -82,7 +82,14 @@ fun ReposScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.repos, key = { it.id.value }) { repo ->
-                        RepoCard(repo = repo, onClick = { onOpenRepo(repo.id.value) })
+                        RepoCard(
+                            repo = repo,
+                            onClick = {
+                                // 记录"最近打开"，列表按 lastOpenedAt 排序才名副其实
+                                viewModel.open(repo)
+                                onOpenRepo(repo.id.value)
+                            },
+                        )
                     }
                 }
             }

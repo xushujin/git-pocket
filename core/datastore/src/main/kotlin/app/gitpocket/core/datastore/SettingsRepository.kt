@@ -94,15 +94,6 @@ object SettingsSpecs {
         defaultValue = true,
     )
 
-    val tabWidth = SettingSpec(
-        id = "editor.tab_width",
-        section = SettingsSection.EDITOR,
-        title = "制表符宽度",
-        description = null,
-        key = intPreferencesKey("editor_tab_width"),
-        defaultValue = 4,
-    )
-
     val authorName = SettingSpec(
         id = "git.author_name",
         section = SettingsSection.GIT,
@@ -159,7 +150,7 @@ object SettingsSpecs {
 
     val all: List<SettingSpec<*>> = listOf(
         themeMode, lightPalette, darkPalette,
-        editorFontSize, autoSave, showLineNumbers, tabWidth,
+        editorFontSize, autoSave, showLineNumbers,
         authorName, authorEmail, autoFetch,
         connectTimeout, readTimeout,
         biometric,
@@ -173,7 +164,6 @@ data class SettingsSnapshot(
     val theme: ThemeSettings = ThemeSettings(),
     val autoSave: Boolean = false,
     val showLineNumbers: Boolean = true,
-    val tabWidth: Int = 4,
     val authorName: String = "",
     val authorEmail: String = "",
     val autoFetch: Boolean = true,
@@ -199,7 +189,6 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             theme = prefs.toThemeSettings(),
             autoSave = prefs[SettingsSpecs.autoSave.key] ?: false,
             showLineNumbers = prefs[SettingsSpecs.showLineNumbers.key] ?: true,
-            tabWidth = prefs[SettingsSpecs.tabWidth.key] ?: 4,
             authorName = prefs[SettingsSpecs.authorName.key].orEmpty(),
             authorEmail = prefs[SettingsSpecs.authorEmail.key].orEmpty(),
             autoFetch = prefs[SettingsSpecs.autoFetch.key] ?: true,
@@ -211,7 +200,6 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     val autoSave: Flow<Boolean> = observe(SettingsSpecs.autoSave)
     val showLineNumbers: Flow<Boolean> = observe(SettingsSpecs.showLineNumbers)
-    val tabWidth: Flow<Int> = observe(SettingsSpecs.tabWidth)
 
     suspend fun authorIdentity(): Pair<String, String> {
         val prefs = store.data.first()
