@@ -195,6 +195,35 @@ class RepoDetailViewModel(
 
     // ---------------------------------------------------------------- 同步
 
+    /** 把某个本地分支合并进当前分支（不切换分支）。 */
+    fun mergeBranch(name: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                branchState = _state.value.branchState.copy(busy = true, error = null),
+            )
+            runCatching { repository.mergeBranch(repoId, name) }
+                .onSuccess { outcome ->
+                    val text = when (outcome.status) {
+                        MergeStatus.UP_TO_DATE -> "已经包含 $name，无需合并"
+                        MergeStatus.FAST_FORWARD -> "已快进到 $name"
+                        MergeStatus.MERGED -> "已合并 $name，产生一个合并提交"
+                        MergeStatus.CONFLICT ->
+                            "合并 $name 时有 ${outcome.conflicts.size} 个冲突，去「变更」里解决"
+                    }
+                    _state.value = _state.value.copy(branchState = BranchState(), message = text)
+                    refresh()
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchState = _state.value.branchState.copy(
+                            busy = false,
+                            error = it.friendlyMessage(),
+                        ),
+                    )
+                }
+        }
+    }
+
     /** 拉取 / 推送共用一条状态机：running 时按钮禁用，结束后刷新页面数据。 */
     fun runSync(action: SyncAction) {
         if (_state.value.sync.running) return
@@ -254,7 +283,16 @@ class RepoDetailViewModel(
     fun resolve(path: String, strategy: ConflictStrategy) {
         viewModelScope.launch {
             runCatching { repository.resolveConflict(repoId, path, strategy) }
-                .onSuccess { refresh(silent = true) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        message = if (repository.conflicts(repoId).isEmpty()) {
+                            "冲突都解决了，可以提交这次合并"
+                        } else {
+                            "已解决 $path"
+                        },
+                    )
+                    refresh(silent = true)
+                }
                 .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
         }
     }
@@ -263,7 +301,16 @@ class RepoDetailViewModel(
     fun markResolved(path: String) {
         viewModelScope.launch {
             runCatching { repository.stageFile(repoId, path) }
-                .onSuccess { refresh(silent = true) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        message = if (repository.conflicts(repoId).isEmpty()) {
+                            "冲突都解决了，可以提交这次合并"
+                        } else {
+                            "已解决 $path"
+                        },
+                    )
+                    refresh(silent = true)
+                }
                 .onFailure { _state.value = _state.value.copy(message = it.friendlyMessage()) }
         }
     }

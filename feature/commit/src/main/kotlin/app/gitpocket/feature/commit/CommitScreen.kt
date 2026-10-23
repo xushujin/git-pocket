@@ -70,7 +70,8 @@ fun CommitScreen(
 
         when {
             state.loading -> GpLoading()
-            state.changes.isEmpty() && state.committedOid == null -> GpEmptyState(
+            // 合并提交即使没有任何文件差异也要能提交（树可能等于当前分支）
+            state.changes.isEmpty() && !state.merging && state.committedOid == null -> GpEmptyState(
                 title = "工作区干净",
                 description = "先去编辑一个文件，再回来提交。",
             )
@@ -138,7 +139,11 @@ fun CommitScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                     GpPrimaryButton(
-                        text = if (state.committing) "提交中…" else "提交 ${state.changes.size} 个文件",
+                        text = when {
+                            state.committing -> "提交中…"
+                            state.merging && state.changes.isEmpty() -> "提交合并"
+                            else -> "提交 ${state.changes.size} 个文件"
+                        },
                         onClick = viewModel::commit,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.committing && state.message.isNotBlank() && state.conflicts.isEmpty(),

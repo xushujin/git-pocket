@@ -121,6 +121,7 @@ fun RepoDetailScreen(
                 DetailTab.CHANGES -> ChangesTab(
                     changes = state.changes,
                     conflicts = state.conflicts,
+                    merging = state.merging,
                     onOpenFile = onOpenFile,
                     onStageAll = viewModel::stageAll,
                     onCommit = onOpenCommit,
@@ -148,6 +149,7 @@ fun RepoDetailScreen(
             onCreate = viewModel::createBranch,
             onCheckout = viewModel::checkoutBranch,
             onCheckoutRemote = viewModel::checkoutRemote,
+            onMerge = viewModel::mergeBranch,
             onDismiss = viewModel::closeBranches,
         )
     }
@@ -245,6 +247,7 @@ private fun GpTabRow(tabs: List<String>, selectedIndex: Int, onSelect: (Int) -> 
 private fun ColumnScope.ChangesTab(
     changes: List<FileChange>,
     conflicts: List<String>,
+    merging: Boolean,
     onOpenFile: (String) -> Unit,
     onStageAll: () -> Unit,
     onCommit: () -> Unit,
@@ -254,10 +257,21 @@ private fun ColumnScope.ChangesTab(
     onMarkResolved: (String) -> Unit,
 ) {
     if (changes.isEmpty()) {
-        GpEmptyState(
-            title = "工作区干净",
-            description = "没有未提交的改动。去「文件」里改点什么吧。",
-        )
+        // 合并时"没有变更"其实是"冲突都解决完了、等着提交合并提交"，
+        // 直接给空态会把用户堵在这里（没有去提交的入口）。
+        if (merging) {
+            GpEmptyState(
+                title = "合并已就绪",
+                description = "冲突都解决了，提交后会生成一个合并提交（两个父提交）。",
+                actionLabel = "提交这次合并",
+                onAction = onCommit,
+            )
+        } else {
+            GpEmptyState(
+                title = "工作区干净",
+                description = "没有未提交的改动。去「文件」里改点什么吧。",
+            )
+        }
         return
     }
     LazyColumn(
@@ -498,6 +512,7 @@ private fun BranchDialog(
     onCreate: () -> Unit,
     onCheckout: (String) -> Unit,
     onCheckoutRemote: (String) -> Unit,
+    onMerge: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val palette = LocalNeumorphicPalette.current
@@ -523,6 +538,7 @@ private fun BranchDialog(
                             selected = item.isCurrent,
                             enabled = !branchState.busy,
                             onClick = { onCheckout(item.name) },
+                            onMerge = if (item.isCurrent) null else ({ onMerge(item.name) }),
                         )
                     }
                     if (branchState.remote.isNotEmpty()) {
@@ -572,7 +588,13 @@ private fun BranchDialog(
 }
 
 @Composable
-private fun BranchRow(name: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun BranchRow(
+    name: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onMerge: (() -> Unit)? = null,
+) {
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
     Row(
@@ -593,6 +615,17 @@ private fun BranchRow(name: String, selected: Boolean, enabled: Boolean, onClick
         )
         if (selected) {
             Text("当前", style = typography.caption, color = palette.accent)
+        } else if (onMerge != null) {
+            // 合并进当前分支：不进这个分支也能合，手机上来回切换代价太高
+            Text(
+                text = "合并",
+                style = typography.caption,
+                color = palette.accent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = enabled, onClick = onMerge)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }

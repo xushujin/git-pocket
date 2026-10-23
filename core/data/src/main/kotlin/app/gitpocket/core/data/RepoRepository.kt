@@ -14,6 +14,7 @@ import app.gitpocket.core.git.GitIdent
 import app.gitpocket.core.git.GitException
 import app.gitpocket.core.git.GitRepo
 import app.gitpocket.core.git.ConflictStrategy
+import app.gitpocket.core.git.MergeOutcome
 import app.gitpocket.core.git.MergeStatus
 import app.gitpocket.core.git.transport.FetchResult
 import app.gitpocket.core.git.transport.GitCredentials
@@ -216,6 +217,18 @@ class RepoRepository(
 
     suspend fun createBranch(repoId: RepoId, name: String, checkout: Boolean) =
         write(repoId) { it.createBranch(name, checkout) }
+
+    /** 把本地某个分支合并进当前分支（不切换）。 */
+    suspend fun mergeBranch(repoId: RepoId, name: String): MergeOutcome = withContext(dispatchers.io) {
+        locks.withLock(repoId.value) {
+            val repo = openRepo(repoId) ?: throw IllegalStateException("仓库不存在：${repoId.value}")
+            repo.use { git ->
+                val tip = git.refs.read("refs/heads/$name")
+                    ?: throw IllegalStateException("分支不存在：$name")
+                git.merge(tip, name, ident())
+            }
+        }
+    }
 
     // ---------------------------------------------------------------- 冲突
 
