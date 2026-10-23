@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-23
+
+### 修复
+
+- **输入框被输入法盖住**：`enableEdgeToEdge()` 之后系统不再按 `adjustResize` 缩窗口，
+  而界面里没有一处处理 IME insets，键盘一弹就压住底部输入框。现在：
+  - 页面骨架 `GpScreen` 统一加 `imePadding()` —— 提交信息、克隆页 token、设置页作者信息、
+    编辑器底部状态栏（行数 / 查看 diff）都随键盘上移；
+  - 弹窗改用自绘的 `GpDialog`（全屏 Dialog + `safeDrawingPadding`，内容可滚动），
+    替代 Material3 `AlertDialog` —— 弹窗是独立窗口，不会自动避让键盘，
+    新建分支时输入框会被盖住；同步弹窗（拉取 / 推送）同样受益；
+  - `GpConfirmDialog` 一并改用 `GpDialog`，全局弹窗样式统一。
+
 ## [1.1.1] - 2026-10-22
 
 ### 新增

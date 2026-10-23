@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -47,7 +52,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
+/**
+ * 页面骨架：状态栏 / 导航栏 / 输入法三处 insets 统一在这里处理。
+ *
+ * `enableEdgeToEdge()` 之后系统不再帮我们 resize 窗口（清单里的 adjustResize 对
+ * edge-to-edge 无效），IME 的高度只能靠 [imePadding] 自己避让；漏了它，页面底部的
+ * 输入框（提交信息、分支名、token）就会被键盘直接盖住。
+ */
 @Composable
 fun GpScreen(
     modifier: Modifier = Modifier,
@@ -59,7 +73,8 @@ fun GpScreen(
             .fillMaxSize()
             .background(palette.base)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .imePadding(),
         content = content,
     )
 }
@@ -422,7 +437,77 @@ fun GpExtendedFab(
     }
 }
 
-/** 通用二次确认弹窗（Material3 AlertDialog，配色跟随主题）。 */
+/**
+ * 通用弹窗（替代 Material3 AlertDialog）。
+ *
+ * 为什么不用 AlertDialog：弹窗是**独立窗口**，edge-to-edge 下既不会被系统 resize，
+ * Compose 也不会替它避让 IME —— 于是带输入框的弹窗（新建分支）一弹键盘，输入框就被盖住。
+ * 这里用全屏 Dialog + [safeDrawingPadding]：键盘弹起时可用区域变小，卡片整体上移。
+ *
+ * 布局约定：整张卡片（标题 / 内容 / 按钮）放在同一个滚动容器里，高度上限取"键盘弹起后的
+ * 可见高度"（BoxWithConstraints.maxHeight）。不用 weight —— 只要 Column 里有 weight，
+ * Column 就会撑满父级最大高度，内容短的时候底部会留一大块空白。
+ */
+@Composable
+fun GpDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    confirmButton: (@Composable RowScope.() -> Unit)? = null,
+    dismissButton: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val typography = LocalGitPocketTypography.current
+    val shape = RoundedCornerShape(24.dp)
+
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                // 状态栏 / 导航栏 / 输入法一起避让：键盘弹起时这块区域自动变矮
+                .safeDrawingPadding()
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            // 键盘弹起后剩下的可见高度：卡片最多长到这么高，再高就内部滚动
+            val cardMaxHeight = maxHeight
+            Box(modifier = modifier.fillMaxWidth().neumorphicRaised(shape, depth = 10.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = cardMaxHeight)
+                        .clip(shape)
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                ) {
+                    Text(title, style = typography.title, color = palette.contentPrimary)
+                    Spacer(Modifier.height(12.dp))
+                    content()
+                    if (confirmButton != null || dismissButton != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            dismissButton?.invoke(this)
+                            confirmButton?.invoke(this)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 通用二次确认弹窗（配色跟随主题）。 */
 @Composable
 fun GpConfirmDialog(
     title: String,
@@ -436,11 +521,9 @@ fun GpConfirmDialog(
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
 
-    androidx.compose.material3.AlertDialog(
+    GpDialog(
+        title = title,
         onDismissRequest = onCancel,
-        containerColor = palette.base,
-        title = { Text(title, style = typography.title, color = palette.contentPrimary) },
-        text = { Text(message, style = typography.body, color = palette.contentSecondary) },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = onConfirm) {
                 Text(confirmText, style = typography.bodyStrong, color = palette.accent)
@@ -451,5 +534,7 @@ fun GpConfirmDialog(
                 Text(dismissText, style = typography.body, color = palette.danger)
             }
         },
-    )
+    ) {
+        Text(message, style = typography.body, color = palette.contentSecondary)
+    }
 }

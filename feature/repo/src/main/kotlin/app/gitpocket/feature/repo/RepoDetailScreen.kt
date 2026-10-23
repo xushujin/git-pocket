@@ -41,6 +41,7 @@ import app.gitpocket.core.designsystem.FileTypeIcon
 import app.gitpocket.core.designsystem.FileTypeIcon
 import app.gitpocket.core.designsystem.GpCard
 import app.gitpocket.core.designsystem.GpConfirmDialog
+import app.gitpocket.core.designsystem.GpDialog
 import app.gitpocket.core.designsystem.GpEmptyState
 import app.gitpocket.core.designsystem.GpLoading
 import app.gitpocket.core.designsystem.GpPrimaryButton
@@ -518,73 +519,71 @@ private fun BranchDialog(
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
 
-    androidx.compose.material3.AlertDialog(
+    GpDialog(
+        title = "分支",
         onDismissRequest = onDismiss,
-        containerColor = palette.base,
-        title = { Text("分支", style = typography.title, color = palette.contentPrimary) },
-        text = {
-            Column {
-                Text(
-                    text = branch?.let { "当前 · $it" } ?: "当前分支未知",
-                    style = typography.caption,
-                    color = palette.contentSecondary,
-                )
-                Spacer(Modifier.height(10.dp))
-
-                LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
-                    items(branchState.local, key = { "l-${it.name}" }) { item ->
-                        BranchRow(
-                            name = item.name,
-                            selected = item.isCurrent,
-                            enabled = !branchState.busy,
-                            onClick = { onCheckout(item.name) },
-                            onMerge = if (item.isCurrent) null else ({ onMerge(item.name) }),
-                        )
-                    }
-                    if (branchState.remote.isNotEmpty()) {
-                        item(key = "remote-header") {
-                            Text(
-                                text = "远端分支（点击建本地分支）",
-                                style = typography.caption,
-                                color = palette.contentSecondary,
-                                modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(branchState.remote, key = { "r-${it.name}" }) { item ->
-                            BranchRow(
-                                name = item.name,
-                                selected = false,
-                                enabled = !branchState.busy,
-                                onClick = { onCheckoutRemote(item.name) },
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                GpTextField(
-                    value = branchState.newName,
-                    onValueChange = onNameChange,
-                    placeholder = "新分支名，例如 feature/login",
-                )
-                Spacer(Modifier.height(8.dp))
-                GpTextButton(
-                    text = "新建并切换",
-                    enabled = !branchState.busy,
-                    onClick = onCreate,
-                )
-                branchState.error?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, style = typography.caption, color = palette.danger)
-                }
-            }
-        },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
                 Text("关闭", style = typography.bodyStrong, color = palette.accent)
             }
         },
-    )
+    ) {
+        Column {
+            Text(
+                text = branch?.let { "当前 · $it" } ?: "当前分支未知",
+                style = typography.caption,
+                color = palette.contentSecondary,
+            )
+            Spacer(Modifier.height(10.dp))
+
+            LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                items(branchState.local, key = { "l-${it.name}" }) { item ->
+                    BranchRow(
+                        name = item.name,
+                        selected = item.isCurrent,
+                        enabled = !branchState.busy,
+                        onClick = { onCheckout(item.name) },
+                        onMerge = if (item.isCurrent) null else ({ onMerge(item.name) }),
+                    )
+                }
+                if (branchState.remote.isNotEmpty()) {
+                    item(key = "remote-header") {
+                        Text(
+                            text = "远端分支（点击建本地分支）",
+                            style = typography.caption,
+                            color = palette.contentSecondary,
+                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(branchState.remote, key = { "r-${it.name}" }) { item ->
+                        BranchRow(
+                            name = item.name,
+                            selected = false,
+                            enabled = !branchState.busy,
+                            onClick = { onCheckoutRemote(item.name) },
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            GpTextField(
+                value = branchState.newName,
+                onValueChange = onNameChange,
+                placeholder = "新分支名，例如 feature/login",
+            )
+            Spacer(Modifier.height(8.dp))
+            GpTextButton(
+                text = "新建并切换",
+                enabled = !branchState.busy,
+                onClick = onCreate,
+            )
+            branchState.error?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, style = typography.caption, color = palette.danger)
+            }
+        }
+    }
 }
 
 @Composable
@@ -647,54 +646,52 @@ private fun SyncDialog(
     val palette = LocalNeumorphicPalette.current
     val typography = LocalGitPocketTypography.current
 
-    androidx.compose.material3.AlertDialog(
+    GpDialog(
+        title = "同步",
         onDismissRequest = { if (!sync.running) onDismiss() },
-        containerColor = palette.base,
-        title = { Text("同步", style = typography.title, color = palette.contentPrimary) },
-        text = {
-            Column {
-                Text(
-                    text = branch?.let { "当前分支 · $it" } ?: "当前分支未知",
-                    style = typography.caption,
-                    color = palette.contentSecondary,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GpTextButton(
-                        text = "拉取",
-                        enabled = !sync.running,
-                        onClick = onPull,
-                    )
-                    GpTextButton(
-                        text = "推送",
-                        enabled = !sync.running,
-                        onClick = onPush,
-                    )
-                }
-
-                if (sync.running) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "${sync.action?.label.orEmpty()}中 · ${sync.progress}",
-                        style = typography.caption,
-                        color = palette.accent,
-                    )
-                }
-                sync.result?.let {
-                    Spacer(Modifier.height(12.dp))
-                    Text(it, style = typography.body, color = palette.contentPrimary)
-                }
-                sync.error?.let {
-                    Spacer(Modifier.height(12.dp))
-                    Text(it, style = typography.body, color = palette.danger)
-                }
-            }
-        },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !sync.running) {
                 Text("关闭", style = typography.bodyStrong, color = palette.accent)
             }
         },
-    )
+    ) {
+        Column {
+            Text(
+                text = branch?.let { "当前分支 · $it" } ?: "当前分支未知",
+                style = typography.caption,
+                color = palette.contentSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GpTextButton(
+                    text = "拉取",
+                    enabled = !sync.running,
+                    onClick = onPull,
+                )
+                GpTextButton(
+                    text = "推送",
+                    enabled = !sync.running,
+                    onClick = onPush,
+                )
+            }
+
+            if (sync.running) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "${sync.action?.label.orEmpty()}中 · ${sync.progress}",
+                    style = typography.caption,
+                    color = palette.accent,
+                )
+            }
+            sync.result?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, style = typography.body, color = palette.contentPrimary)
+            }
+            sync.error?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, style = typography.body, color = palette.danger)
+            }
+        }
+    }
 }
