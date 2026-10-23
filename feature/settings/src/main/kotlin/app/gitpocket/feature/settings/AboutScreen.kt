@@ -88,6 +88,11 @@ fun AboutScreen(appVersion: String, onBack: () -> Unit) {
                     color = palette.contentSecondary,
                 )
             }
+
+            GpSectionHeader("许可证")
+            GpCard {
+                AboutLine("Apache License 2.0", "Copyright 2026 GitPocket contributors")
+            }
         }
     }
 }

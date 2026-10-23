@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-23
+
+### 变更
+
+- **开源许可证**：采用 [Apache License 2.0](LICENSE)，`Copyright 2026 GitPocket contributors`；
+  设置 → 关于页新增「许可证」一栏，README 许可证章节补齐。
+
 ## [1.1.2] - 2026-10-23
 
 ### 修复
