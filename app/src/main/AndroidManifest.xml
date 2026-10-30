@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 生物识别解锁：普通权限，不弹授权框；实际校验由 BiometricPrompt 完成 -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- 应用内更新：下载完 APK 后交给系统安装器（仍由用户在系统界面确认安装） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".GitPocketApplication"
@@ -27,6 +29,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 安装包放在应用私有缓存里，系统安装器没有读权限，必须经 FileProvider 授权 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

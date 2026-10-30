@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只暴露应用内更新下载到的那一个目录：cacheDir/updates/。
+  不要把整个 cacheDir 或 filesDir 暴露出去 —— 那里有仓库数据和 token。
+-->
+<paths>
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

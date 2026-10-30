@@ -16,6 +16,7 @@ import app.gitpocket.feature.repos.CloneScreen
 import app.gitpocket.feature.repos.ReposScreen
 import app.gitpocket.feature.settings.AboutScreen
 import app.gitpocket.feature.settings.SettingsScreen
+import app.gitpocket.core.update.UpdateRepository
 
 private object Routes {
     const val REPOS = "repos"
@@ -36,7 +37,7 @@ private object Routes {
 }
 
 @Composable
-fun AppNavHost(appVersion: String) {
+fun AppNavHost(appVersion: String, updater: UpdateRepository) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Routes.REPOS) {
@@ -143,6 +144,7 @@ fun AppNavHost(appVersion: String) {
         composable(Routes.ABOUT) {
             AboutScreen(
                 appVersion = appVersion,
+                updater = updater,
                 onBack = { navController.popBackStack() },
             )
         }

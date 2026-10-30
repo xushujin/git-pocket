@@ -43,9 +43,9 @@ val versionNameValue: String = if (gitTag.isNotBlank()) {
 }
 // versionCode 始终取构建时间戳（yyMMddHH）：tag 派生的数字（v1.0.0 -> 10000）
 // 会小于开发包（26xxxxxx），导致正式包无法覆盖安装。versionName 仍由 tag 决定。
-val versionCodeValue: Int = SimpleDateFormat("yyMMddHH", Locale.US)
-    .format(Date())
-    .toInt()
+// VERSION_CODE 只用于特殊场景（回填/本地验证升级链路），正常构建不要传。
+val versionCodeValue: Int = System.getenv("VERSION_CODE")?.toIntOrNull()
+    ?: SimpleDateFormat("yyMMddHH", Locale.US).format(Date()).toInt()
 
 android {
     namespace = "app.gitpocket"
@@ -158,6 +158,7 @@ dependencies {
     implementation(project(":core:datastore"))
     implementation(project(":core:security"))
     implementation(project(":core:data"))
+    implementation(project(":core:update"))
     implementation(project(":feature:repos"))
     implementation(project(":feature:repo"))
     implementation(project(":feature:editor"))

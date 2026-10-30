@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -363,6 +366,43 @@ fun GpDivider() {
             .height(1.dp)
             .background(palette.contentSecondary.copy(alpha = 0.12f))
     )
+}
+
+/**
+ * 进度条（下载这类"有明确总量"的场景用）。
+ *
+ * [progress] 取 0f..1f；不传时按"不确定进度"渲染一条低透明度的底条。
+ * 填充用主题强调色，轨道用表面色 —— 与拟态卡片的层次一致，不引入 Material 的滑块。
+ */
+@Composable
+fun GpProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    height: Dp = 10.dp,
+) {
+    val palette = LocalNeumorphicPalette.current
+    val clamped = progress.coerceIn(0f, 1f)
+    // 进度跳变时补一点动画，避免每 1% 抖一下
+    val animated by animateFloatAsState(targetValue = clamped, label = "progress")
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(height / 2))
+            .background(palette.darkShadow.copy(alpha = 0.35f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(animated)
+                .clip(RoundedCornerShape(height / 2))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(palette.accent.copy(alpha = 0.75f), palette.accent),
+                    )
+                ),
+        )
+    }
 }
 
 @Composable

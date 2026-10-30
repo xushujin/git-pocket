@@ -44,6 +44,8 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 androidx-test-core = { module = "androidx.test:core", version = "1.6.1" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+# 仅用于 JVM 单测：Android 运行时用的是系统自带的 org.json
+json = { module = "org.json:json", version = "20240303" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

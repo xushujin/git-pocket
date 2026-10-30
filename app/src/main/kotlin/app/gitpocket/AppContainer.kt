@@ -8,6 +8,7 @@ import app.gitpocket.core.database.DatabaseFactory
 import app.gitpocket.core.datastore.SettingsRepository
 import app.gitpocket.core.datastore.settingsDataStore
 import app.gitpocket.core.security.KeystoreTokenStore
+import app.gitpocket.core.update.UpdateRepository
 import java.io.File
 
 /**
@@ -38,4 +39,7 @@ class AppContainer(context: Context) {
             dispatchers = DefaultAppDispatchers,
         )
     }
+
+    /** 应用内更新：查 Release、下载 APK、校验签名后交给系统安装器。 */
+    val updateRepository: UpdateRepository by lazy { UpdateRepository(appContext) }
 }

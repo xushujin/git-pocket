@@ -26,6 +26,7 @@ include(
     ":core:datastore",
     ":core:security",
     ":core:data",
+    ":core:update",
     ":feature:repos",
     ":feature:repo",
     ":feature:editor",

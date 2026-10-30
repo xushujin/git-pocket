@@ -6,7 +6,7 @@
 
 ---
 
-## 能力清单（v1.2.0）
+## 能力清单（v1.3.0）
 
 本地 Git 内核、完整界面、HTTPS 克隆 / 拉取 / 推送、分支切换、三方合并与冲突解决均已打通。
 
@@ -32,6 +32,7 @@
 | **clone（HTTPS + PAT）** | ✅ 已实现 | smart HTTP v0，真实 GitHub 仓库验证 |
 | **fetch / pull / push（HTTPS）** | ✅ 已实现 | 用真实 `git http-backend` 做端到端对拍 |
 | **三方合并 + 冲突解决** | ✅ 已实现 | 行级 diff3；index 写 stage 1/2/3，可选我的 / 对方的 / 手动改 |
+| **应用内在线更新** | ✅ 已实现 | 查 GitHub Release → 下载（带进度）→ 校验 SHA-256 与签名 → 交给系统安装器 |
 
 ## 支持范围
 
@@ -196,6 +197,25 @@ base64 -i ~/.gitpocket/keys/gitpocket-release.jks | tr -d '\n' | pbcopy
 > 换密码不会改变签名指纹（仍是同一张证书），但改完要同步更新 `keystore.properties`
 > 和上面的 `STORE_PASSWORD` / `KEY_PASSWORD`。
 
+## 应用内更新
+
+入口：**设置 → 关于 → 更新**。
+
+流程与取舍：
+
+1. `GET https://api.github.com/repos/xushujin/git-pocket/releases/latest`，按 `versionName` 比较（只比数字段，
+   `1.10.0 > 1.9.9`）；草稿与预发布不提示，匿名限流（60 次/小时）命中时给明确文案。
+2. 下载 `GitPocket-<版本>.apk` 到 `cacheDir/updates/`，边下边报进度（先写 `.part` 再改名，中断不留半成品）。
+3. 校验两道：**SHA-256** 对比同版本发布的 `.apk.sha256`；**签名证书**必须与已安装应用一致。
+   任一不过就删包并拒绝安装（签名不一致系统本来也装不上，提前拦能给出可读原因）。
+4. `FileProvider` 授权 + `ACTION_VIEW` 拉起系统安装器 —— 不静默安装，仍由用户在系统界面确认。
+
+首次使用需在系统里允许 GitPocket「安装未知应用」（`REQUEST_INSTALL_PACKAGES` + 逐应用授权），
+关于页会引导跳转。
+
+发布侧要求：Release 必须带 `GitPocket-<版本>.apk` 与 `.apk.sha256`（CI 已自动产出），
+tag 形如 `v1.3.0`；两者缺一都会让客户端拒绝安装。
+
 ## 项目结构
 
 ```
@@ -208,6 +228,7 @@ core/database           Room + 显式迁移 + schema 导出
 core/datastore          设置注册表（DataStore）
 core/security           AndroidKeyStore token 封装
 core/data               仓库门面（Git + Room + 设置）
+core/update             应用内更新（查 Release、下载进度、SHA-256 + 签名校验、拉起安装器）
 feature/repos           首页
 feature/repo            仓库详情 / 文件浏览
 feature/editor          编辑器 / diff

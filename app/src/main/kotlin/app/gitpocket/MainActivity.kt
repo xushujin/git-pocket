@@ -57,7 +57,10 @@ class MainActivity : FragmentActivity() {
                             enabled = loaded.biometric,
                             settings = container.settings,
                         ) {
-                            AppNavHost(appVersion = BuildConfig.VERSION_NAME)
+                            AppNavHost(
+                                appVersion = BuildConfig.VERSION_NAME,
+                                updater = container.updateRepository,
+                            )
                         }
                     }
                 }
