@@ -6,7 +6,7 @@
 
 ---
 
-## 能力清单（v1.3.0）
+## 能力清单（v1.4.0）
 
 本地 Git 内核、完整界面、HTTPS 克隆 / 拉取 / 推送、分支切换、三方合并与冲突解决均已打通。
 
@@ -246,6 +246,21 @@ feature/settings        设置 / 关于
 ./gradlew :core:git:test
 # 报告：core/git/build/reports/tests/test/index.html
 ```
+
+## 图标
+
+柔光拟态方向，全部由脚本生成，不依赖手工导出的图片：
+
+```bash
+python3 scripts/dev/generate-icon.py     # 需要 Pillow
+```
+
+- 设计说明：`docs/图标设计.md`（形体 / 光 / 材质 / 色彩 / 验收标准）
+- 预览：`docs/icon-512.png`（商店与 README 用）、`docs/icon-preview.png`（192/96/72/48 自检）
+- 自适应图标：`drawable/ic_launcher_background.xml`（矢量渐变 + 左上柔光）、
+  `mipmap-*/ic_launcher_foreground.png`、`drawable/ic_launcher_monochrome.xml`（Android 13+ 主题图标）
+
+改配色要同时改脚本顶部常量与背景矢量的渐变值，否则桌面背景与商店图会对不上。
 
 ## 数据与隐私
 

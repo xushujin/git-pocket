@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标的背景层：一块被光从左上方照到的"材料"。
+  只有一层竖向渐变 + 一团很淡的径向柔光，没有描边、没有图案。
+  颜色与 scripts/dev/generate-icon.py 里的 BASE_TOP / BASE_BOTTOM / LIGHT 保持一致。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 材料本色：上浅下深，靠明度拉层次 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="0"
+                android:endX="54"
+                android:endY="108">
+                <item android:offset="0" android:color="#E8E6DF" />
+                <item android:offset="0.55" android:color="#DDDAD1" />
+                <item android:offset="1" android:color="#C6C2B8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 唯一光源：左上，向外缓慢消失 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="30"
+                android:centerY="24"
+                android:gradientRadius="82">
+                <item android:offset="0" android:color="#4DFFFAF2" />
+                <item android:offset="0.45" android:color="#26FFFAF2" />
+                <item android:offset="1" android:color="#00FFFAF2" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
